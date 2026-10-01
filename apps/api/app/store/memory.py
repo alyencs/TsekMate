@@ -5,7 +5,7 @@ import copy
 import threading
 from typing import Any
 
-from .base import TABLES, Store, local_signed_url
+from .base import TABLES, UNIQUE, Store, UniqueViolation, local_signed_url
 
 
 class MemoryStore(Store):
@@ -17,6 +17,15 @@ class MemoryStore(Store):
         self._lock = threading.RLock()
         self._public_url = public_url
         self._secret = secret
+
+    def _check_unique(self, table: str, row: dict) -> None:
+        """Same rule as the database's unique indexes (call with the lock held)."""
+        for t, cols in UNIQUE:
+            if t != table or any(row.get(c) is None for c in cols):
+                continue
+            for other in self._rows[table].values():
+                if other["id"] != row["id"] and all(other.get(c) == row.get(c) for c in cols):
+                    raise UniqueViolation(f"{table}: {', '.join(cols)} must be unique")
 
     def select(self, table: str, **eq: Any) -> list[dict]:
         with self._lock:
@@ -31,6 +40,8 @@ class MemoryStore(Store):
         rows = rows if isinstance(rows, list) else [rows]
         with self._lock:
             for r in rows:
+                self._check_unique(table, r)
+            for r in rows:
                 self._rows[table][r["id"]] = copy.deepcopy(r)
         return copy.deepcopy(rows)
 
@@ -39,6 +50,16 @@ class MemoryStore(Store):
             row = self._rows[table].get(row_id)
             if row is None:
                 raise KeyError(f"{table}/{row_id} not found")
+            self._check_unique(table, {**row, **patch})
+            row.update(copy.deepcopy(patch))
+            return copy.deepcopy(row)
+
+    def update_where(self, table: str, row_id: str, patch: dict, **expect: Any) -> dict | None:
+        with self._lock:
+            row = self._rows[table].get(row_id)
+            if row is None or any(row.get(k) != v for k, v in expect.items()):
+                return None
+            self._check_unique(table, {**row, **patch})
             row.update(copy.deepcopy(patch))
             return copy.deepcopy(row)
 

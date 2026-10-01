@@ -34,6 +34,14 @@ def new_id() -> str:
     return str(uuid.uuid4())
 
 
+class UniqueViolation(Exception):
+    """A write would break a uniqueness rule (for example two papers for one student in one activity)."""
+
+
+# (table, columns): rows must differ on these columns when none of them is null. Mirrors the database indexes.
+UNIQUE = [("submissions", ("activity_id", "student_id"))]
+
+
 class Store(ABC):
     kind: str = "base"
 
@@ -49,6 +57,10 @@ class Store(ABC):
 
     @abstractmethod
     def update(self, table: str, row_id: str, patch: dict) -> dict: ...
+
+    @abstractmethod
+    def update_where(self, table: str, row_id: str, patch: dict, **expect: Any) -> dict | None:
+        """Compare-and-set: apply `patch` only if the row still has every `expect` value. Returns the row, or None."""
 
     @abstractmethod
     def delete(self, table: str, **eq: Any) -> None: ...

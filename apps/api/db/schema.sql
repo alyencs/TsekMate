@@ -52,10 +52,13 @@ create table if not exists submissions (
   image_hash text,
   status text not null check (status in ('uploaded', 'grading', 'needs_review', 'ready', 'approved', 'failed')),
   quality jsonb,
+  grading_attempt text,                 -- id of the grading run that owns the paper while status = 'grading'
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
 create index if not exists submissions_activity on submissions(activity_id);
+-- one paper per student per activity (unidentified papers are not limited)
+create unique index if not exists submissions_one_paper_per_student on submissions (activity_id, student_id) where student_id is not null;
 
 create table if not exists ai_results (
   id text primary key,
