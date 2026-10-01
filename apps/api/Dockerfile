@@ -18,4 +18,6 @@ COPY assets ./assets
 RUN useradd --create-home --uid 10001 tsekmate && chown -R tsekmate /app
 USER tsekmate
 # Cloud Run sets $PORT. Single worker: grading jobs run in background threads of this process.
-CMD exec uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8080} --workers 1
+# --proxy-headers: take the client address from Cloud Run's X-Forwarded-For (only Google's front end can reach the
+# container), so sign-in throttling counts each client separately instead of the proxy.
+CMD exec uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8080} --workers 1 --proxy-headers --forwarded-allow-ips="*"

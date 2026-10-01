@@ -34,6 +34,7 @@ MAX_FAILURES = 5
 FAILURE_WINDOW = 600  # seconds
 _failures: dict[str, list[float]] = {}
 _fail_lock = threading.Lock()
+_revoke_lock = threading.Lock()
 
 
 @dataclass(frozen=True)
@@ -102,10 +103,11 @@ def _revoked() -> dict[str, int]:
 
 
 def revoke(teacher: Teacher) -> None:
-    now = time.time()
-    keep = {k: v for k, v in _revoked().items() if int(v) > now}  # expired tokens are invalid anyway
-    keep[teacher.token_id] = teacher.expires
-    get_store().insert("app_settings", {"id": REVOKED_ROW, "value": keep, "updated_at": now_iso()})
+    with _revoke_lock:  # read-modify-write: two sign-outs at once must not drop one of them
+        now = time.time()
+        keep = {k: v for k, v in _revoked().items() if int(v) > now}  # expired tokens are invalid anyway
+        keep[teacher.token_id] = teacher.expires
+        get_store().insert("app_settings", {"id": REVOKED_ROW, "value": keep, "updated_at": now_iso()})
 
 
 def bearer(request: Request) -> str | None:
