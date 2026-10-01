@@ -1,0 +1,195 @@
+{
+  "activity_id": "act-linear-eq-quiz1",
+  "writer": "font:Caveat",
+  "style": "synthetic",
+  "synthetic": true,
+  "student_name": null,
+  "student_id": null,
+  "problems": [
+    {
+      "problem_id": "act-linear-eq-quiz1-p1",
+      "transcript": [
+        "6x - 5 = 13",
+        "6x = 13 - 5",
+        "6x = 8",
+        "x = 4/3"
+      ],
+      "units": [
+        {
+          "criterion": "Setup",
+          "verdict": "correct",
+          "error_type": null,
+          "points": 2.0
+        },
+        {
+          "criterion": "Method",
+          "verdict": "error",
+          "error_type": "computational",
+          "points": 1
+        },
+        {
+          "criterion": "Computation",
+          "verdict": "correct",
+          "error_type": null,
+          "points": 1
+        },
+        {
+          "criterion": "Final answer",
+          "verdict": "error",
+          "error_type": null,
+          "points": 0
+        }
+      ],
+      "planted_errors": [
+        {
+          "criterion": "Method",
+          "error_type": "computational"
+        }
+      ]
+    },
+    {
+      "problem_id": "act-linear-eq-quiz1-p2",
+      "transcript": [
+        "3(x - 4) = 2x + 5",
+        "3x - 12 = 2x + 5",
+        "x = 5 + 12 = 17",
+        "Final answer: x = 17"
+      ],
+      "units": [
+        {
+          "criterion": "Setup",
+          "verdict": "correct",
+          "error_type": null,
+          "points": 2.0
+        },
+        {
+          "criterion": "Method",
+          "verdict": "correct",
+          "error_type": null,
+          "points": 3.0
+        },
+        {
+          "criterion": "Computation",
+          "verdict": "correct",
+          "error_type": null,
+          "points": 3.0
+        },
+        {
+          "criterion": "Final answer",
+          "verdict": "correct",
+          "error_type": null,
+          "points": 2.0
+        }
+      ],
+      "planted_errors": []
+    },
+    {
+      "problem_id": "act-linear-eq-quiz1-p3",
+      "transcript": [
+        "5y - 2y - 3 = 12",
+        "3y = 12 + 3",
+        "3y = 15",
+        "y = 5"
+      ],
+      "units": [
+        {
+          "criterion": "Setup",
+          "verdict": "correct",
+          "error_type": null,
+          "points": 2.0
+        },
+        {
+          "criterion": "Method",
+          "verdict": "correct",
+          "error_type": null,
+          "points": 3.0
+        },
+        {
+          "criterion": "Computation",
+          "verdict": "correct",
+          "error_type": null,
+          "points": 3.0
+        },
+        {
+          "criterion": "Final answer",
+          "verdict": "correct",
+          "error_type": null,
+          "points": 2.0
+        }
+      ],
+      "planted_errors": []
+    },
+    {
+      "problem_id": "act-linear-eq-quiz1-p4",
+      "transcript": [
+        "4x - x - 9 = 6",
+        "3x = 6 + 9",
+        "3x = 15",
+        "x = 5"
+      ],
+      "units": [
+        {
+          "criterion": "Setup",
+          "verdict": "correct",
+          "error_type": null,
+          "points": 2.0
+        },
+        {
+          "criterion": "Method",
+          "verdict": "correct",
+          "error_type": null,
+          "points": 3.0
+        },
+        {
+          "criterion": "Computation",
+          "verdict": "correct",
+          "error_type": null,
+          "points": 3.0
+        },
+        {
+          "criterion": "Final answer",
+          "verdict": "correct",
+          "error_type": null,
+          "points": 2.0
+        }
+      ],
+      "planted_errors": []
+    },
+    {
+      "problem_id": "act-linear-eq-quiz1-p5",
+      "transcript": [
+        "2x + 6 - 4 = 3x - 1",
+        "2x + 2 = 3x - 1",
+        "2 + 1 = 3x - 2x",
+        "x = 3"
+      ],
+      "units": [
+        {
+          "criterion": "Setup",
+          "verdict": "correct",
+          "error_type": null,
+          "points": 2.0
+        },
+        {
+          "criterion": "Method",
+          "verdict": "correct",
+          "error_type": null,
+          "points": 3.0
+        },
+        {
+          "criterion": "Computation",
+          "verdict": "correct",
+          "error_type": null,
+          "points": 3.0
+        },
+        {
+          "criterion": "Final answer",
+          "verdict": "correct",
+          "error_type": null,
+          "points": 2.0
+        }
+      ],
+      "planted_errors": []
+    }
+  ]
+}

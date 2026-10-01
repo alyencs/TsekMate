@@ -1,0 +1,512 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}</style><style>:root{color-scheme:light dark;--md-bg:#fff;--md-text:rgba(0,0,0,.8);--md-muted:rgba(0,0,0,.6);--md-fill:rgba(0,0,0,.04);--md-fill-strong:rgba(0,0,0,.06);--md-rule:rgba(0,0,0,.1);--md-rule-strong:rgba(0,0,0,.16);--md-link:hsl(210 100% 45%)}@media (prefers-color-scheme:dark){:root:where(:not([data-theme="light"])){--md-bg:#0d0d0d;--md-text:rgba(255,255,255,.85);--md-muted:rgba(255,255,255,.6);--md-fill:rgba(255,255,255,.06);--md-fill-strong:rgba(255,255,255,.09);--md-rule:rgba(255,255,255,.14);--md-rule-strong:rgba(255,255,255,.22);--md-link:hsl(210 100% 72%)}}:root[data-theme="dark"]{color-scheme:dark;--md-bg:#0d0d0d;--md-text:rgba(255,255,255,.85);--md-muted:rgba(255,255,255,.6);--md-fill:rgba(255,255,255,.06);--md-fill-strong:rgba(255,255,255,.09);--md-rule:rgba(255,255,255,.14);--md-rule-strong:rgba(255,255,255,.22);--md-link:hsl(210 100% 72%)}:root[data-theme="light"]{color-scheme:light}@media print{:root,:root[data-theme="dark"]{color-scheme:light;--md-bg:#fff;--md-text:rgba(0,0,0,.8);--md-muted:rgba(0,0,0,.6);--md-fill:rgba(0,0,0,.04);--md-fill-strong:rgba(0,0,0,.06);--md-rule:rgba(0,0,0,.1);--md-rule-strong:rgba(0,0,0,.16);--md-link:hsl(210 100% 45%)}}body{background:var(--md-bg);color:var(--md-text);max-width:720px;margin:0 auto;padding:32px;display:flex;flex-direction:column;gap:10px;font:14px/1.55 -apple-system,BlinkMacSystemFont,'SF Pro','Segoe UI',sans-serif;overflow-wrap:break-word}body>:first-child{margin-top:0}h1,h2,h3,h4,h5,h6{margin:6px 0 0;line-height:1.25;font-weight:600;text-wrap:balance}h1{font-size:1.35em}h2{font-size:1.15em;color:var(--md-muted)}h3,h4,h5,h6{font-size:1em}p,ul,ol,blockquote,table,pre,hr{margin:0}strong{font-weight:600}a{color:var(--md-link);text-decoration:none}a:hover{text-decoration:underline}ul,ol{display:flex;flex-direction:column;gap:6px;padding-left:22px}ul{list-style:disc}ol{list-style:decimal}:is(li,td,th)>*+:is(p,ul,ol,blockquote){margin-top:6px}blockquote{display:flex;flex-direction:column;gap:10px;border-left:2px solid var(--md-rule);padding-left:10px;color:var(--md-muted)}:not(pre)>code{background:var(--md-fill);padding:1px 3px;border-radius:4px;font:.92em 'SF Mono',ui-monospace,Menlo,Consolas,monospace}a>code{background:none;color:inherit}pre{background:var(--md-fill);padding:10px 12px;border-radius:6px;overflow-x:auto;font:12px/1.5 'SF Mono',ui-monospace,Menlo,Consolas,monospace;margin-block:4px}pre code{background:none;padding:0;font:inherit}table{width:100%;border-collapse:separate;border-spacing:2px;font:inherit}th,td{padding:6px 8px;border-radius:3px;text-align:left;vertical-align:top}th{background:var(--md-fill-strong);font-weight:600}td{background:var(--md-fill)}:is(th,td) :not(pre)>code{background:transparent}hr{border:0;border-top:1px solid var(--md-rule-strong);margin-block:10px}img{max-width:100%;height:auto;border-radius:4px}</style>
+</head><body>
+<h1>TsekMate</h1>
+<h3><em>Every step checked. Every teacher in control.</em></h3>
+<p>AI-assisted, step-by-step grading of handwritten student work, with teacher approval and parent-ready feedback. Entry for the <strong>AI in Education Hackathon 2026: &quot;Transforming Education Through Artificial Intelligence.&quot;</strong></p>
+<hr>
+<h2>1. Summary</h2>
+<p><strong>TsekMate</strong> reads a photo of handwritten math or science work, checks it <strong>step by step against the teacher's rubric</strong>, and produces a marked-up draft with feedback. The teacher reviews, edits, and approves it. Only approved results reach the gradebook and the parent update.</p>
+<table>
+<thead>
+<tr>
+<th></th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Category</strong></td>
+<td>Teachers: AI Grading Assistant (also touches Teacher Workload Reduction, Parent-School Communication, Learning Analytics)</td>
+</tr>
+<tr>
+<td><strong>Primary user</strong></td>
+<td>Public and private school teachers of math and science (Grades 7 to 10 for the prototype)</td>
+</tr>
+<tr>
+<td><strong>Secondary users</strong></td>
+<td>Students (see approved feedback), parents (see plain-language updates), school heads</td>
+</tr>
+<tr>
+<td><strong>AI used</strong></td>
+<td>Vision-capable LLM (OCR + reasoning), structured output, confidence scoring, NLP summarization and translation</td>
+</tr>
+<tr>
+<td><strong>Designed to fit</strong></td>
+<td>School systems such as Livro's Wela+ / Silid LMS through a clean adapter API (prototype uses a mock; not an official integration)</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Build scope:</strong> this document describes the full TsekMate design and what we will build in the 24-hour hackathon window. Features are marked <strong>Built</strong> (the core of the 24-hour build), <strong>Stretch</strong> (only if the core is stable), or <strong>Roadmap</strong> (designed, not built). Section 13 has the hour-by-hour plan.</p>
+<hr>
+<h2>2. The Problem</h2>
+<p><strong>Teachers are overloaded, and grading handwritten work is a big part of it.</strong></p>
+<ul>
+<li>Surveys of more than 15,000 teachers across over 2,000 Philippine schools, run by IDInsight with EDCOM 2, found teachers working about <strong>52 hours a week</strong> on average, with roughly <strong>17.8 hours on ancillary tasks</strong> against the 10 hours DepEd prescribes. Checking assessments and grading performance tasks are among those tasks.</li>
+<li>Under DepEd Order No. 005, s. 2024, teachers have six hours of classroom teaching and two hours for ancillary work, which includes assessing learner progress. In practice the grading spills into evenings and weekends.</li>
+<li>DepEd has been cutting paperwork (reducing required teacher forms from 174 to five regular forms), which shows the system recognizes the burden. But grading itself is not something a form reduction removes.</li>
+</ul>
+<p><strong>Students wait too long for feedback.</strong> When a class of 40 submits worksheets, feedback arrives days later, after the lesson has moved on. Marking only the final answer also hides <em>where</em> the student's reasoning broke down.</p>
+<p><strong>Disruptions make it worse.</strong> Typhoons, floods, and suspensions interrupt classes. Learning platforms such as Silid LMS already let students work and upload written activities remotely, but the teacher still grades each upload by hand.</p>
+<p><strong>The gap:</strong> most automated graders handle multiple choice or typed answers. Handwritten, multi-step work is the hardest to automate, which is why it is still done by hand.</p>
+<hr>
+<h2>3. The Solution</h2>
+<h3>3.1 Teacher flow</h3>
+<ol>
+<li><strong>Create an activity.</strong> Enter the problems, an answer key, and a rubric (for example: setup 2 pts, method 3 pts, computation 3 pts, final answer 2 pts). A rubric template library speeds this up.</li>
+<li><strong>Collect work.</strong> Photos arrive from the student's upload, or the teacher photographs a stack of papers.</li>
+<li><strong>AI drafts the grade.</strong> For each submission, TsekMate transcribes the work, splits it into steps, and judges each step against the rubric.</li>
+<li><strong>Teacher reviews.</strong> The review screen shows the photo beside the transcript, a verdict per step (correct, error, unclear), an error type, a confidence score, and a suggested score. Low-confidence items are flagged first.</li>
+<li><strong>Teacher approves or edits.</strong> Nothing is recorded until the teacher approves.</li>
+<li><strong>Outputs.</strong> The approved score goes to the gradebook. The student sees feedback. A parent update is drafted in English, Filipino, or Bisaya and also needs teacher approval.</li>
+<li><strong>Class summary.</strong> TsekMate shows the most common errors across the class (for example, &quot;14 of 38 students distributed the negative sign incorrectly&quot;) and suggests a short reteach focus.</li>
+</ol>
+<p>In the 24-hour prototype, work enters by photo upload from the teacher's phone or laptop (no student upload portal), and the gradebook is a mock page.</p>
+<h3>3.2 Key features</h3>
+<table>
+<thead><tr><th>Feature</th><th>What it does</th><th>Why it matters</th><th>24h status</th></tr></thead>
+<tbody>
+<tr><td><strong>Step-level checking</strong></td><td>Marks each step, not just the final answer</td><td>Rewards correct method and pinpoints where reasoning failed</td><td>Built</td></tr>
+<tr><td><strong>Rubric-grounded grading</strong></td><td>Scores strictly against the teacher's rubric</td><td>Keeps the teacher's standards, and makes results explainable</td><td>Built</td></tr>
+<tr><td><strong>Error-type tagging</strong></td><td>Labels errors as computational, conceptual, notation, or presentation</td><td>Supports targeted feedback and class analytics</td><td>Built</td></tr>
+<tr><td><strong>Confidence scores and flags</strong></td><td>Routes unclear handwriting and uncertain judgments to the teacher</td><td>Prevents silent mistakes</td><td>Built (model-reported confidence)</td></tr>
+<tr><td><strong>Teacher review and override</strong></td><td>Edit any step, score, or comment, and every edit is saved</td><td>Human in the loop, and gives us measurable agreement data</td><td>Built</td></tr>
+<tr><td><strong>Class misconception summary</strong></td><td>Aggregates errors across the class</td><td>Turns grading into learning analytics</td><td>Built (simple counts)</td></tr>
+<tr><td><strong>Parent update in the family's language</strong></td><td>AI-drafted, teacher-approved message</td><td>Parent-school communication and multi-language support</td><td>Stretch (English and Filipino)</td></tr>
+<tr><td><strong>Text-to-speech feedback</strong></td><td>Reads approved feedback aloud</td><td>Accessibility for students with reading difficulties</td><td>Stretch</td></tr>
+<tr><td><strong>Capture offline, upload later</strong></td><td>Photos queue on the device until connectivity returns</td><td>Practical for low-connectivity and post-typhoon use</td><td>Roadmap</td></tr>
+</tbody>
+</table>
+<h3>3.3 What TsekMate is not</h3>
+<ul>
+<li>It <strong>does not solve homework for students</strong> or generate answers to unsubmitted work. It evaluates work a student has already done.</li>
+<li>It <strong>does not make final grading decisions.</strong> Teachers do.</li>
+<li>By default, student feedback <strong>points to the error and gives a hint</strong> instead of printing the full solution, and teachers can change this setting.</li>
+</ul>
+<hr>
+<h2>4. Why AI Is Needed</h2>
+<p>A rules-based system can check a typed final answer against a key. It cannot:</p>
+<ul>
+<li><strong>Read handwriting</strong>, including messy, slanted, or smudged writing, plus math notation (fractions, exponents, symbols).</li>
+<li><strong>Follow a student's reasoning</strong> across several steps and recognize a valid alternative method.</li>
+<li><strong>Explain <em>why</em> a step is wrong</strong> in plain language and in context.</li>
+<li><strong>Group similar mistakes</strong> across a class without a hand-built rule for each one.</li>
+</ul>
+<p>That requires vision (to read) and language reasoning (to judge and explain), which is why a vision-capable LLM is central. To keep it reliable, TsekMate pairs the LLM with deterministic checks (see Section 6.4).</p>
+<hr>
+<h2>5. Research Basis</h2>
+<h3>5.1 What current research says about this approach</h3>
+<ul>
+<li><strong>It works well with good rubrics, but reading handwriting is the weak point.</strong> A 2026 evaluation of vision-capable LLMs grading authentic handwritten math from two university STEM courses (Levine et al., arXiv 2605.19043) reported that the best cost-effective model reached about 95% accuracy on individual rubric items when rubrics were well designed. In the best model, around 87% of its errors came from <em>transcription failures</em> rather than misapplying the rubric. An earlier pipeline using GPT-4V plus MathPix reached only about 60%. <strong>Design lesson:</strong> invest in image quality, clear rubrics, and flagging unreadable work.</li>
+<li><strong>Models can penalize the wrong thing.</strong> A study of multimodal LLMs on handwritten work (arXiv 2510.05538) found that vision accuracy is a strong predictor of grading accuracy, that some models marked down a faulty process even when the final answer was right, and that some produced more false negatives than others. <strong>Design lesson:</strong> grade steps against an explicit rubric, test more than one model, and keep the teacher in the loop.</li>
+<li><strong>Grading incorrect work is harder than grading correct work.</strong> An evaluation of GPT-4o on handwritten college math exams (arXiv 2411.05231) found predicted scores were still off by about 7.7% on average, and the model struggled more on incorrect solutions. <strong>Design lesson:</strong> weaker students' work needs the most teacher attention, so route it to review.</li>
+<li><strong>Error types matter.</strong> The FERMAT benchmark (arXiv 2501.07244) evaluates vision-language models on 2,244 handwritten school-level math solutions across four error axes: computational, conceptual, notation, and presentation. TsekMate adopts the same four categories for tagging.</li>
+<li><strong>Humans disagree too.</strong> A study of vision-language models on handwritten exam grading (arXiv 2609.14284) found that agreement between two faculty markers was lower than the agreement between the best tuned model and the examiner it was calibrated to. This does not mean the AI is &quot;better.&quot; It means grading consistency is a real issue and an AI second opinion with transparent reasoning can help, as long as teachers decide.</li>
+</ul>
+<p><strong>What we claim:</strong> TsekMate is a <em>draft-and-review</em> assistant. We do not claim it replaces teachers or matches them on every paper.</p>
+<h3>5.2 Teacher workload evidence</h3>
+<p>See Section 2: about 52 hours per week on average, about 17.8 hours of ancillary work, and a majority of surveyed teachers working long hours. Sources are listed at the end.</p>
+<h3>5.3 Related systems and what we learned (Hack4Edu 2025)</h3>
+<p>We reviewed the winners of <strong>#Hack4Edu</strong>, the sixth edition of an international, hybrid hackathon with a social purpose by Fundación Telefónica and Fundación &quot;la Caixa&quot; (ProFuturo programme and the Pontifical University of Salamanca). <strong>None of the winners is a handwritten grader</strong>, so there is no direct equivalent. The closest ones, and what they suggest:</p>
+<table>
+<thead>
+<tr>
+<th>Winner</th>
+<th>What it does</th>
+<th>Relevance to TsekMate</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>EIDOS</strong> (UNIE University, Innovation winner)</td>
+<td>Student chat assistant whose data is categorized by AI so teachers see which topics and concepts students find hardest</td>
+<td>Same idea as our <strong>class misconception summary</strong>: turning learner data into teacher-facing analytics. Their team also stressed ethical, responsible AI use</td>
+</tr>
+<tr>
+<td><strong>Peru CNEB platform</strong> (UNSA, Senior 3rd place)</td>
+<td>Curriculum-trained platform for lesson planning, content in Spanish, Quechua, and Aymara, supports learners with ADHD, dyslexia, ASD, and designed for low connectivity</td>
+<td>Supports our emphasis on <strong>curriculum alignment, local languages, accessibility, and low-connectivity design</strong></td>
+</tr>
+<tr>
+<td><strong>TutorIA</strong> (UPSA)</td>
+<td>Personalized learning platform combining gamification, accessibility, and AI support</td>
+<td>Shows judges value <strong>accessibility and personalization</strong></td>
+</tr>
+<tr>
+<td><strong>Milo</strong> (Universidad Mexiquense del Bicentenario)</td>
+<td>Assistant for students with autism spectrum disorder</td>
+<td>Shows the weight on <strong>inclusion and real social purpose</strong></td>
+</tr>
+<tr>
+<td><strong>Nómada</strong> (Technological University of Panama)</td>
+<td>AI educational robot for children without internet access</td>
+<td>Confirms <strong>offline thinking</strong> is rewarded</td>
+</tr>
+<tr>
+<td><strong>MyLEA</strong> (UNIR, Innovation 1st)</td>
+<td>Centralizes study tools for distance learners</td>
+<td>Shows solving a <strong>real, personal pain point</strong> resonates</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Takeaways we applied:</strong> (1) every winner had a clear human beneficiary and purpose, (2) several emphasized inclusion, local language, or offline use, (3) teacher-facing analytics and ethical AI framing were valued, and (4) none tackled handwritten, step-level grading, which is our opening.</p>
+<hr>
+<h2>6. Technical Implementation</h2>
+<h3>6.1 Technologies (all from the hackathon's allowed list)</h3>
+<table>
+<thead><tr><th>Layer</th><th>Choice</th><th>Reason</th></tr></thead>
+<tbody>
+<tr><td><strong>Frontend</strong></td><td><strong>React</strong> web app, mobile-friendly with camera upload</td><td>Camera capture on phones and fast to build. Installable PWA and offline queue are roadmap</td></tr>
+<tr><td><strong>Backend</strong></td><td><strong>Python (FastAPI)</strong></td><td>Strong ecosystem for AI calls and quick to stand up</td></tr>
+<tr><td><strong>AI</strong></td><td><strong>Anthropic Claude</strong> (vision, Claude Haiku 4.5, <code>claude-haiku-4-5</code>) as the single provider for the 24-hour build (Google Gemini was tried briefly for its free tier, then the team returned to Claude)</td><td>Vision + reasoning in one call with structured JSON output. A local <strong>Ollama / Hugging Face</strong> model for privacy-strict deployments is roadmap</td></tr>
+<tr><td><strong>Database</strong></td><td><strong>Supabase (PostgreSQL)</strong> with file storage</td><td>Relational data and image storage in one service. Auth and row-level security are roadmap, so the prototype has one teacher account</td></tr>
+<tr><td><strong>Cloud</strong></td><td><strong>Vercel</strong> (frontend) and a cloud host for the API (Google Cloud or AWS)</td><td>All on the allowed list. If deployment takes too long, we demo from a local machine</td></tr>
+<tr><td><strong>Math verification</strong></td><td><strong>SymPy</strong> (algebraic equivalence checks)</td><td>Stretch. Deterministic check of step-to-step transitions</td></tr>
+<tr><td><strong>Speech</strong></td><td>Browser Web Speech API (text-to-speech)</td><td>Stretch. No extra cost and only a few lines of code</td></tr>
+</tbody>
+</table>
+<h3>6.2 Architecture (24-hour build)</h3>
+<pre><code>Teacher phone or laptop (React web app)
+  upload photo of student work
+        |
+        v
+Backend API (FastAPI)
+  1. Vision LLM call: transcribe + split into steps + grade vs rubric
+        -&gt; structured JSON (step text, verdict, error type, confidence)
+  2. Schema validation, then confidence router:
+        low confidence -&gt; &#34;needs teacher&#34;
+  3. Class aggregator: error-type counts across the sample set
+        |
+        v
+Supabase (PostgreSQL + storage)
+  activities, rubrics, submissions, AI results, teacher reviews
+        |
+        v
+Teacher review UI -&gt; approval -&gt; mock gradebook page
+  (stretch: parent message draft, text-to-speech)
+</code></pre>
+<h3>6.2b Target architecture (roadmap)</h3>
+<pre><code>Student/Teacher phone (React PWA)
+  capture -&gt; auto-crop, deskew, name-field redaction (on device)
+  -&gt; offline queue -&gt; upload when online
+        |
+        v
+Backend API (FastAPI)
+  1. Pre-check: image quality (blur, lighting) -&gt; ask for retake if poor
+  2. Vision LLM call: transcribe + split into steps + grade vs rubric
+  3. Deterministic verification (SymPy) on algebraic steps
+  4. Confidence router: low confidence / disagreement -&gt; &#34;needs teacher&#34;
+  5. Class aggregator: error-type counts, common misconceptions
+        |
+        v
+Supabase (PostgreSQL + storage, row-level security)
+        |
+        v
+Teacher review UI -&gt; approval -&gt; Adapter API -&gt; gradebook / LMS
+                              -&gt; student view + parent message
+</code></pre>
+<h3>6.3 Data model (core tables)</h3>
+<p><strong>24-hour build:</strong> <code>students</code> (pseudonymous ID, section), <code>activities</code>, <code>rubrics</code> (criteria, points), <code>submissions</code> (image reference, status), <code>ai_results</code> (steps JSON, suggested score, confidence, model, prompt version), <code>teacher_reviews</code> (final score, edits, timestamp).</p>
+<p><strong>Later:</strong> <code>parent_messages</code> (language, draft, approved flag) as a stretch item, and a full <code>audit_log</code> (who did what, when).</p>
+<h3>6.4 How we make the AI reliable</h3>
+<ul>
+<li><strong>Single-call transcribe-and-grade (Built)</strong>, with structured JSON output validated against a schema. (The Levine et al. study cites earlier findings that a single call outperformed separating transcription from grading.)</li>
+<li><strong>Explicit rubric in the prompt (Built)</strong>, with the teacher's key and sample solutions.</li>
+<li><strong>Confidence routing (Built):</strong> unclear transcription or low confidence goes to the top of the teacher's queue.</li>
+<li><strong>Prompt and model versioning (Built):</strong> each result stores the model and prompt version.</li>
+<li><strong>Deterministic cross-check (Stretch):</strong> for algebra, SymPy tests whether each step follows from the previous one. Disagreement with the LLM lowers confidence and flags the item.</li>
+<li><strong>Image quality gate (Stretch):</strong> blurry or dark photos get a retake prompt before they reach the model. In the build, we use clear photos and a retake note in the UI.</li>
+</ul>
+<h3>6.5 Integration with school systems (bonus criterion)</h3>
+<p>Schools already run platforms like <strong>Wela+ (Silid LMS, grading, parent app)</strong>. TsekMate is designed as a <strong>separate AI service behind an adapter</strong>:</p>
+<ul>
+<li>Adapter endpoints: <code>GET /activities</code>, <code>GET /submissions</code> (pull work), <code>POST /grades/draft</code> (push approved scores), <code>POST /notifications</code> (parent updates). We define these in the document and the API spec.</li>
+<li>The prototype implements a <strong>mock gradebook page</strong> with synthetic data. Swapping in a real API means replacing the adapter, not rebuilding the service.</li>
+<li>We describe TsekMate as <em>designed to plug into</em> such platforms. We do not claim an existing partnership or access to any vendor's real APIs or data.</li>
+</ul>
+<hr>
+<h2>7. Data Privacy and Responsible AI</h2>
+<h3>7.1 Why this matters</h3>
+<p>Under the Philippine <strong>Data Privacy Act of 2012 (RA 10173)</strong>, information about a person's education, including grades and school records, is <strong>sensitive personal information</strong>. National Privacy Commission guidance notes that learners' privacy rights are exercised by parents or guardians when students are minors, and that schools remain responsible for data even when they outsource processing. Student handwriting also identifies a person. (We are not lawyers, and this document is not legal advice.)</p>
+<h3>7.2 What we do in the prototype</h3>
+<table>
+<thead>
+<tr>
+<th>Principle</th>
+<th>How TsekMate applies it</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>No real student data</strong></td>
+<td>All demo and test work is <strong>synthetic</strong>, handwritten by our team with planted errors, or from <strong>consenting adult volunteers</strong></td>
+</tr>
+<tr>
+<td><strong>Consent</strong></td>
+<td>A short written consent form for volunteers (purpose, who sees it, retention, right to withdraw). How a school would handle consent for minors is covered in the presentation, not built</td>
+</tr>
+<tr>
+<td><strong>Data minimization</strong></td>
+<td>Demo papers carry no real names, only pseudonymous IDs, so the AI receives only the work image. On-device name redaction is roadmap</td>
+</tr>
+<tr>
+<td><strong>Human in the loop</strong></td>
+<td>Every grade and parent message needs teacher approval</td>
+</tr>
+<tr>
+<td><strong>Transparency</strong></td>
+<td>Visible labels: &quot;AI-assisted draft, reviewed by your teacher&quot;</td>
+</tr>
+<tr>
+<td><strong>Retention limits</strong></td>
+<td>Design: images are deleted after approval (configurable), leaving only scores, feedback, and the review record. In the prototype, demo images are deleted after the event</td>
+</tr>
+<tr>
+<td><strong>Role-based access</strong></td>
+<td>Design: teachers see their own classes, students see only their own approved feedback, and parents see only their child's updates (Supabase row-level security). The prototype has a teacher view only</td>
+</tr>
+<tr>
+<td><strong>Third-party AI</strong></td>
+<td>Prototype uses synthetic data only. For real deployment, schools should use a provider setting without retention or training use, a data processing agreement, and data-residency review, or a <strong>locally hosted model</strong> where required</td>
+</tr>
+<tr>
+<td><strong>Non-labeling feedback</strong></td>
+<td>Comments describe the <em>work</em> (&quot;needs practice distributing negatives&quot;), never the <em>child</em> (&quot;weak student&quot;)</td>
+</tr>
+</tbody>
+</table>
+<h3>7.3 Responsible AI</h3>
+<ul>
+<li><strong>Bias and fairness:</strong> we test a small set across handwriting styles (neat, cursive, slanted, cramped) and report results per style. With about 15 samples, these are indicative only. Weak groups get more review prompts, and we say so openly.</li>
+<li><strong>Hallucination handling:</strong> structured output, rubric grounding, SymPy cross-checks, confidence flags, and mandatory review.</li>
+<li><strong>Accountability:</strong> the prototype stores AI output, teacher edits, and final decisions, with the model and prompt version.</li>
+<li><strong>Translation quality:</strong> Filipino parent messages (stretch) and any later Bisaya messages are machine drafts and are labeled as needing teacher or native-speaker review before sending.</li>
+<li><strong>Limits stated openly:</strong> poor handwriting, unusual notation, and diagrams lower accuracy. TsekMate is a decision-support tool.</li>
+</ul>
+<hr>
+<h2>8. Compliance With Hackathon Rules</h2>
+<table>
+<thead>
+<tr>
+<th>Requirement or prohibition</th>
+<th>How TsekMate complies</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Actual AI capability required</strong></td>
+<td>Vision LLM for handwriting reading, reasoning, feedback generation, and error classification. This is not a CRUD app</td>
+</tr>
+<tr>
+<td><strong>Allowed technologies only</strong></td>
+<td>React, Python, Supabase/PostgreSQL, Anthropic Claude / Google Gemini (optionally Ollama / Hugging Face), Vercel, Google Cloud or AWS</td>
+</tr>
+<tr>
+<td><strong>No academic dishonesty</strong></td>
+<td>It evaluates submitted work, does not solve homework, and defaults to hints over full solutions. It also helps teachers detect where students actually struggle</td>
+</tr>
+<tr>
+<td><strong>No harmful or offensive content</strong></td>
+<td>Feedback is constructive and non-labeling. Output is filtered and reviewed by the teacher. Test content is school-appropriate math and science</td>
+</tr>
+<tr>
+<td><strong>No copyright violation</strong></td>
+<td>We write our <strong>own</strong> problems, worksheets, and rubrics. We do not scan or reuse copyrighted textbooks or exams</td>
+</tr>
+<tr>
+<td><strong>No sensitive data without consent</strong></td>
+<td>Synthetic data and consented adults only. No real school records. Consent flow shown</td>
+</tr>
+</tbody>
+</table>
+<hr>
+<h2>9. Judging Criteria Alignment</h2>
+<table>
+<thead>
+<tr>
+<th>Criterion</th>
+<th>Weight</th>
+<th>How TsekMate addresses it</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Innovation and Creativity</strong></td>
+<td>25%</td>
+<td>Step-level grading of <em>handwritten</em> work with rubric grounding, deterministic cross-checks, and class misconception analytics. Handwritten multi-step grading was not among the closest Hack4Edu winners</td>
+</tr>
+<tr>
+<td><strong>Educational Impact</strong></td>
+<td>25%</td>
+<td>Returns teacher hours, speeds up feedback, shows <em>where</em> reasoning fails, and gives parents understandable updates</td>
+</tr>
+<tr>
+<td><strong>AI Integration</strong></td>
+<td>20%</td>
+<td>Vision + language reasoning + structured output + confidence routing, with a small measured accuracy check on our own samples</td>
+</tr>
+<tr>
+<td><strong>Technical Implementation</strong></td>
+<td>15%</td>
+<td>A working end-to-end pipeline with schema-validated output, confidence routing, a review UI, and a defined adapter API with a mock gradebook. SymPy checks if time allows</td>
+</tr>
+<tr>
+<td><strong>User Experience</strong></td>
+<td>10%</td>
+<td>Phone capture in a few taps, side-by-side review screen, low-confidence items first</td>
+</tr>
+<tr>
+<td><strong>Presentation and Demo</strong></td>
+<td>5%</td>
+<td>A live photo-to-approved-grade demo in about a minute, with a backup recording</td>
+</tr>
+</tbody>
+</table>
+<h3>Bonus areas</h3>
+<table>
+<thead>
+<tr>
+<th>Bonus</th>
+<th>Our approach</th>
+<th>Honest limit</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Offline capability</strong></td>
+<td>Roadmap. Designed, not built in 24 hours</td>
+<td>AI grading itself needs connectivity (or a local model)</td>
+</tr>
+<tr>
+<td><strong>Accessibility</strong></td>
+<td>Text-to-speech feedback (stretch) and large, readable text in the UI</td>
+<td>Screen-reader testing is limited in the prototype</td>
+</tr>
+<tr>
+<td><strong>Data privacy</strong></td>
+<td>See Section 7</td>
+<td>Real deployment needs school-level agreements</td>
+</tr>
+<tr>
+<td><strong>Responsible AI</strong></td>
+<td>Human in the loop, review record with model and prompt version, small per-style accuracy check</td>
+<td>Accuracy varies with handwriting quality</td>
+</tr>
+<tr>
+<td><strong>Multi-language</strong></td>
+<td>English and Filipino parent messages (stretch). Bisaya is roadmap</td>
+<td>Needs native-speaker review</td>
+</tr>
+<tr>
+<td><strong>Scalability</strong></td>
+<td>Stateless API and managed database. Queue-based processing is roadmap</td>
+<td>Not load tested. Cost per image needs monitoring</td>
+</tr>
+<tr>
+<td><strong>Integration with school systems</strong></td>
+<td>Adapter API defined, with a mock gradebook page</td>
+<td>Not an official integration</td>
+</tr>
+</tbody>
+</table>
+<hr>
+<h2>10. Answers to the Judges' Four Questions</h2>
+<ol>
+<li><strong>What educational problem does it solve?</strong> Slow, labor-intensive grading of handwritten work, which delays student feedback and adds to teacher overload.</li>
+<li><strong>Why is AI needed?</strong> Reading handwriting and judging multi-step reasoning cannot be done with fixed rules.</li>
+<li><strong>Who benefits?</strong> Teachers (time), students (faster, specific feedback), parents (clear updates), and school heads (class-wide insight).</li>
+<li><strong>Can schools actually use it?</strong> Yes. It works from a phone camera, keeps the teacher in control, and is designed to connect to existing school platforms through an adapter.</li>
+</ol>
+<hr>
+<h2>11. Evaluation Plan (what we will measure)</h2>
+<p>We will report <strong>measured results</strong>, not assumed ones. In a 24-hour window the sample is small, so results are indicative and we will say so. The goals below are things to test, not claims.</p>
+<table>
+<thead><tr><th>Test</th><th>Method</th><th>Goal</th></tr></thead>
+<tbody>
+<tr><td><strong>Transcription accuracy</strong></td><td>About 15 handwritten samples from 3 to 4 writers across styles (neat, cursive, slanted, cramped). Compare AI transcript to our ground truth</td><td>Report accuracy per style</td></tr>
+<tr><td><strong>Rubric-item agreement</strong></td><td>Team-defined ground truth on planted errors. Compare AI verdicts at the rubric-item level</td><td>Report the actual agreement figure</td></tr>
+<tr><td><strong>Error detection</strong></td><td>Plant 15 to 20 known errors across the four error types. Count catches and misses</td><td>Report catch rate per error type</td></tr>
+<tr><td><strong>Flagging usefulness</strong></td><td>Do low-confidence flags coincide with actual mistakes?</td><td>Show flagged items have a higher error rate</td></tr>
+<tr><td><strong>Time check (optional)</strong></td><td>2 team members grade 5 papers by hand and with TsekMate review</td><td>Report as informal only. Skip if time is short</td></tr>
+<tr><td><strong>Quick usability (optional)</strong></td><td>2 to 3 people at the event try the review screen and answer two questions</td><td>Report ratings and comments</td></tr>
+</tbody>
+</table>
+<p>If results are weaker than hoped, we will show them anyway and explain how the confidence flags and teacher review contain the risk.</p>
+<hr>
+<h2>12. Risks and Mitigations</h2>
+<table>
+<thead><tr><th>Risk</th><th>Mitigation</th></tr></thead>
+<tbody>
+<tr><td>Not enough time to build everything</td><td>Must-have, stretch, and roadmap tiers. Checkpoint at hour 12 and code freeze at hour 20</td></tr>
+<tr><td>Making the handwritten sample set takes too long</td><td>Start at hour 2, split the writing across the team, and stop at about 15 papers</td></tr>
+<tr><td>Messy handwriting lowers accuracy</td><td>Confidence flags, teacher review, per-style accuracy reporting. Image quality gate if time allows</td></tr>
+<tr><td>LLM misjudges valid alternative methods</td><td>Rubric allows alternate methods and the teacher can override. SymPy equivalence check if built</td></tr>
+<tr><td>API outage, rate limits, or slow connection during the demo</td><td>Test the API early, save sample results, and keep pre-processed results and a recorded backup demo</td></tr>
+<tr><td>Privacy concerns about cloud AI</td><td>Synthetic data, no real names, retention limits in the design, local-model option described</td></tr>
+<tr><td>Overreliance on AI grades</td><td>Mandatory approval, &quot;AI draft&quot; labeling, saved review record</td></tr>
+<tr><td>Translation errors in regional languages</td><td>Filipino message is a stretch item, labeled as a draft, and limited to short templated messages</td></tr>
+<tr><td>Scope creep</td><td>Fixed MVP: one worksheet type (linear equations) and an English interface</td></tr>
+</tbody>
+</table>
+<hr>
+<h2>13. MVP Scope and 24-Hour Build Plan</h2>
+<p>We have 24 hours, so the plan protects one thing: <strong>a working photo-to-approved-grade loop</strong> on one worksheet type (solving linear equations).</p>
+<table>
+<thead><tr><th>Tier</th><th>Items</th></tr></thead>
+<tbody>
+<tr><td><strong>Must have (Built)</strong></td><td>Photo upload, step-level grading against a rubric with JSON output, error-type tags and confidence, teacher review screen with edit and approve, class summary, mock gradebook, small evaluation on our samples</td></tr>
+<tr><td><strong>Stretch</strong></td><td>Parent message in English and Filipino, text-to-speech, SymPy checks, image quality check, Gemini comparison</td></tr>
+<tr><td><strong>Roadmap (described only)</strong></td><td>Offline capture queue and PWA, on-device name redaction, student and parent views with role-based access, Bisaya messages, local model, real LMS integration, geometry and diagrams, essay grading</td></tr>
+</tbody>
+</table>
+<p><strong>Cut order if we fall behind:</strong> SymPy first, then text-to-speech, then the parent message, then the image quality check. Never cut the review screen or the evaluation.</p>
+<table>
+<thead><tr><th>Hours</th><th>Goal</th></tr></thead>
+<tbody>
+<tr><td>0 to 2</td><td>Lock scope. Write the worksheet (5 linear equation problems), answer key, and rubric. Set up the repo, Supabase project, and API keys</td></tr>
+<tr><td>2 to 6</td><td>Handwrite the sample set (about 15 papers with planted errors, 3 to 4 writers). Write the grading prompt and JSON schema and test from the command line. In parallel, set up the backend and frontend skeletons</td></tr>
+<tr><td>6 to 12</td><td>Backend: upload, grade, and save endpoints. Frontend: upload screen and review screen (photo beside transcript, step verdicts, confidence, edit, approve). Connect them</td></tr>
+<tr><td>12 to 16</td><td>Confidence routing, class summary, and mock gradebook. Fix problems found with real samples</td></tr>
+<tr><td>16 to 20</td><td>Run the evaluation on the sample set. Add stretch items only if the core is stable. Deploy, or confirm the local demo setup</td></tr>
+<tr><td>20 to 23</td><td>Code freeze. Build slides, save backup results, record the backup demo video, and rehearse twice</td></tr>
+<tr><td>23 to 24</td><td>Buffer and submission</td></tr>
+</tbody>
+</table>
+<p><strong>Checkpoints:</strong></p>
+<ul>
+<li><strong>Hour 6:</strong> the AI returns valid JSON on at least 10 samples from the command line.</li>
+<li><strong>Hour 12:</strong> one paper goes from upload to approved grade, end to end. If not, drop all stretch items and fix this first.</li>
+<li><strong>Hour 20:</strong> code freeze. Only bug fixes after this point.</li>
+</ul>
+<p><strong>Suggested split for a team of four (adjust to your size):</strong> AI and prompts, backend and database, frontend, and sample data with evaluation and slides.</p>
+<hr>
+<h2>14. Demo and Presentation Outline (about 5 minutes)</h2>
+<ol>
+<li><strong>Hook (30 s):</strong> &quot;It's 9 PM. Ma'am is still checking 40 notebooks, and students will see feedback on Thursday.&quot;</li>
+<li><strong>Problem and evidence (30 s):</strong> workload figures, delayed feedback, typhoon disruption.</li>
+<li><strong>Live demo (2 min):</strong> photograph a messy handwritten solution, see step-by-step marking, a flagged low-confidence step, the teacher edits one score and approves, and the grade appears in the mock gradebook. If the stretch item is done, the parent message appears in Filipino.</li>
+<li><strong>Class view (30 s):</strong> the most common error across our sample set.</li>
+<li><strong>How the AI works and the technical stack (45 s):</strong> the architecture diagram and the reliability layers.</li>
+<li><strong>Privacy and responsible AI (30 s):</strong> synthetic data, redaction, teacher approval, audit log.</li>
+<li><strong>Results and next steps (30 s):</strong> measured accuracy on our sample set, what we did not get to, and the roadmap.</li>
+</ol>
+<p><strong>Likely judge questions:</strong> <em>What happens when the AI is wrong?</em> (flags, review, override, audit.) <em>Is this real student data?</em> (No, synthetic or consenting adults.) <em>Where does the data go?</em> (Images with no real names go to the AI provider. In a real deployment they would be deleted after approval, with a local model option for strict schools.) <em>How is this different from ChatGPT?</em> (Structured rubric grading, teacher review workflow, class analytics, parent communication, adapter integration, verification layer.) <em>Will it work on bad handwriting?</em> (Here are our per-style results, and here is how we flag the risk.)</p>
+<hr>
+<h2>15. Sources</h2>
+<ul>
+<li>Levine et al., <em>Automated Grading of Handwritten Mathematics Using Vision-Capable LLMs</em> (2026): <a href="https://arxiv.org/html/2605.19043v1">https://arxiv.org/html/2605.19043v1</a></li>
+<li><em>Seeing the Big Picture: Evaluating Multimodal LLMs' Ability to Interpret and Grade Handwritten Student Work</em>: <a href="https://arxiv.org/pdf/2510.05538">https://arxiv.org/pdf/2510.05538</a></li>
+<li><em>Evaluating GPT-4 at Grading Handwritten Solutions in Math Exams</em>: <a href="https://arxiv.org/html/2411.05231v1">https://arxiv.org/html/2411.05231v1</a></li>
+<li>Nath et al., <em>Can Vision-Language Models Evaluate Handwritten Math?</em> (FERMAT): <a href="https://arxiv.org/abs/2501.07244">https://arxiv.org/abs/2501.07244</a></li>
+<li>Tonmoy et al., <em>Vision-Language Models for Criterion-Level Grading of Handwritten Examinations</em>: <a href="https://arxiv.org/pdf/2609.14284">https://arxiv.org/pdf/2609.14284</a></li>
+<li>EDCOM 2 policy brief on teacher ancillary workload: <a href="https://edcom2.gov.ph/media/2025/03/EDCOM2_Policy-Brief_Ancillary-Workload.pdf">https://edcom2.gov.ph/media/2025/03/EDCOM2_Policy-Brief_Ancillary-Workload.pdf</a></li>
+<li>PNA, <em>DepEd to slash teachers' paperwork load by 57%</em>: <a href="https://www.pna.gov.ph/articles/1246192">https://www.pna.gov.ph/articles/1246192</a></li>
+<li>PNA, <em>DepEd OKs more classroom time, specific ancillary tasks for teachers</em>: <a href="https://www.pna.gov.ph/articles/1223752">https://www.pna.gov.ph/articles/1223752</a></li>
+<li>National Privacy Commission, Data Privacy Act of 2012: <a href="https://privacy.gov.ph/data-privacy-act/">https://privacy.gov.ph/data-privacy-act/</a></li>
+<li>NPC Advisory Opinion No. 2025-017 (student school records): <a href="https://privacy.gov.ph/wp-content/uploads/2026/01/NPC-Advisory-Opinion-No.-2025-017_Redactedv2.pdf">https://privacy.gov.ph/wp-content/uploads/2026/01/NPC-Advisory-Opinion-No.-2025-017_Redactedv2.pdf</a></li>
+<li>NPC Data Privacy Council Education Sector Advisory No. 2020-1: <a href="https://privacy.gov.ph/wp-content/uploads/2023/05/DP-Council-Education-Sector-Advisory-No.-2020-1.pdf">https://privacy.gov.ph/wp-content/uploads/2023/05/DP-Council-Education-Sector-Advisory-No.-2020-1.pdf</a></li>
+<li>ProFuturo, <em>Meet the winners of #Hack4Edu</em>: <a href="https://profuturo.education/en/news/meet-the-winners-of-hack4edu-the-hackathon-with-a-social-purpose-dedicated-to-digital-education/">https://profuturo.education/en/news/meet-the-winners-of-hack4edu-the-hackathon-with-a-social-purpose-dedicated-to-digital-education/</a></li>
+<li>Livro Systems (Wela+, Silid LMS): <a href="https://livro.systems/">https://livro.systems/</a> and <a href="https://blog.wela.online/learning-continuity-with-wela-silid-lms-during-disasters/">https://blog.wela.online/learning-continuity-with-wela-silid-lms-during-disasters/</a></li>
+</ul>
+<p><em>Note: figures from research papers describe their own datasets and settings. They are used to inform our design, not as claims about TsekMate's performance. TsekMate's own results will come from the evaluation in Section 11.</em></p>
+
+</body></html>

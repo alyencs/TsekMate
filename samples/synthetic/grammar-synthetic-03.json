@@ -1,0 +1,197 @@
+{
+  "activity_id": "act-sva-worksheet3",
+  "writer": "font:Caveat",
+  "style": "synthetic",
+  "synthetic": true,
+  "student_name": "Patricia Lim",
+  "student_id": "2026-019",
+  "problems": [
+    {
+      "problem_id": "act-sva-worksheet3-p1",
+      "transcript": [
+        "Each of the students has a notebook.",
+        "Each\" is singular, so the verb is \"has."
+      ],
+      "units": [
+        {
+          "criterion": "Finds the errors",
+          "verdict": "correct",
+          "error_type": null,
+          "points": 3.0
+        },
+        {
+          "criterion": "Correct revision",
+          "verdict": "correct",
+          "error_type": null,
+          "points": 4.0
+        },
+        {
+          "criterion": "Rule explanation",
+          "verdict": "correct",
+          "error_type": null,
+          "points": 2.0
+        },
+        {
+          "criterion": "Spelling and punctuation",
+          "verdict": "correct",
+          "error_type": null,
+          "points": 1.0
+        }
+      ],
+      "planted_errors": []
+    },
+    {
+      "problem_id": "act-sva-worksheet3-p2",
+      "transcript": [
+        "My sister walks to school every day.",
+        "Sister\" is one person, so the verb needs -s."
+      ],
+      "units": [
+        {
+          "criterion": "Finds the errors",
+          "verdict": "correct",
+          "error_type": null,
+          "points": 3.0
+        },
+        {
+          "criterion": "Correct revision",
+          "verdict": "correct",
+          "error_type": null,
+          "points": 4.0
+        },
+        {
+          "criterion": "Rule explanation",
+          "verdict": "correct",
+          "error_type": null,
+          "points": 2.0
+        },
+        {
+          "criterion": "Spelling and punctuation",
+          "verdict": "correct",
+          "error_type": null,
+          "points": 1.0
+        }
+      ],
+      "planted_errors": []
+    },
+    {
+      "problem_id": "act-sva-worksheet3-p3",
+      "transcript": [
+        "The dogs in the yard bark loudly.",
+        "The subject is \"dogs,\" which is plural."
+      ],
+      "units": [
+        {
+          "criterion": "Finds the errors",
+          "verdict": "correct",
+          "error_type": null,
+          "points": 3.0
+        },
+        {
+          "criterion": "Correct revision",
+          "verdict": "correct",
+          "error_type": null,
+          "points": 4.0
+        },
+        {
+          "criterion": "Rule explanation",
+          "verdict": "correct",
+          "error_type": null,
+          "points": 2.0
+        },
+        {
+          "criterion": "Spelling and punctuation",
+          "verdict": "correct",
+          "error_type": null,
+          "points": 1.0
+        }
+      ],
+      "planted_errors": []
+    },
+    {
+      "problem_id": "act-sva-worksheet3-p4",
+      "transcript": [
+        "The team of players is practicing, and their coach says they are ready.",
+        "The subject is team, not players."
+      ],
+      "units": [
+        {
+          "criterion": "Finds the errors",
+          "verdict": "correct",
+          "error_type": null,
+          "points": 1.0
+        },
+        {
+          "criterion": "Finds the errors",
+          "verdict": "correct",
+          "error_type": null,
+          "points": 1.0
+        },
+        {
+          "criterion": "Finds the errors",
+          "verdict": "correct",
+          "error_type": null,
+          "points": 1.0
+        },
+        {
+          "criterion": "Correct revision",
+          "verdict": "correct",
+          "error_type": null,
+          "points": 4.0
+        },
+        {
+          "criterion": "Rule explanation",
+          "verdict": "correct",
+          "error_type": null,
+          "points": 2.0
+        },
+        {
+          "criterion": "Spelling and punctuation",
+          "verdict": "correct",
+          "error_type": null,
+          "points": 1.0
+        }
+      ],
+      "planted_errors": []
+    },
+    {
+      "problem_id": "act-sva-worksheet3-p5",
+      "transcript": [
+        "Neither the teacher nor the students were late.",
+        "Students is plural."
+      ],
+      "units": [
+        {
+          "criterion": "Finds the errors",
+          "verdict": "correct",
+          "error_type": null,
+          "points": 3.0
+        },
+        {
+          "criterion": "Correct revision",
+          "verdict": "correct",
+          "error_type": null,
+          "points": 4.0
+        },
+        {
+          "criterion": "Rule explanation",
+          "verdict": "error",
+          "error_type": "grammar_rule",
+          "points": 1
+        },
+        {
+          "criterion": "Spelling and punctuation",
+          "verdict": "correct",
+          "error_type": null,
+          "points": 1.0
+        }
+      ],
+      "planted_errors": [
+        {
+          "criterion": "Rule explanation",
+          "error_type": "grammar_rule"
+        }
+      ]
+    }
+  ]
+}

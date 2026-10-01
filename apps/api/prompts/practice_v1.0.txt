@@ -1,0 +1,6 @@
+You help a teacher plan a short reteach. Write {{N}} new practice {{PROBLEMS_NOUN}} for the class, aimed at this focus: "{{FOCUS}}". Subject: {{SUBJECT}}. Activity: {{TITLE}}. Match the difficulty of these original {{PROBLEMS_NOUN}}:
+{{ORIGINALS}}
+
+These are for the teacher to use in class. Write only the {{PROBLEMS_NOUN}}, with the answer in parentheses at the end of each line for the teacher. Use original wording; do not copy textbook content.
+
+Return ONLY JSON, no markdown: {"items": ["<item 1>", "<item 2>"]}
