@@ -1,0 +1,42 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+  body {
+    @apply bg-page text-ink font-sans antialiased;
+    font-feature-settings: 'cv11', 'ss01';
+  }
+  :focus-visible {
+    outline: 2px solid #ea580c;
+    outline-offset: 2px;
+  }
+  input[type='number']::-webkit-inner-spin-button {
+    opacity: 0.4;
+  }
+}
+
+@layer components {
+  .card {
+    @apply bg-white border border-line rounded-card shadow-card;
+  }
+  .label-caps {
+    @apply text-[11px] font-semibold uppercase tracking-[0.08em] text-muted;
+  }
+  .field {
+    @apply h-10 w-full rounded-ctl border border-line bg-white px-4 text-[15px] text-ink placeholder:text-gray-400
+      focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20;
+  }
+  .field-soft {
+    @apply w-full rounded-ctl border border-line bg-[#F9F7F5] px-4 text-[15px] text-ink
+      focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20;
+  }
+  .sr-only-focusable:not(:focus) {
+    @apply sr-only;
+  }
+}
