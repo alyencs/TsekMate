@@ -31,7 +31,9 @@ The zip uses different frame numbers from the brief and has no "00 Components" o
    Decision: review detail, approval modal, student view, and gradebook cells are **per problem** (matching the mockup).
    The queue "Suggested score" column shows the **score of the paper's lowest-confidence problem** (the problem the teacher
    lands on when they click Review), which is the problem that reproduces "5 / 10" for S-014. Paper totals (out of 50/40)
-   are used for the class average and the dashboard. Approval approves the whole paper (all problems).
+   are used for the class average and the dashboard. Approval approves the whole paper (all problems), so the approval
+   modal shows the **paper total** (for example "45 / 50"), not the mockup's per-problem "6 / 10"; a one-line note under
+   the Approve button says that approval covers every problem on the paper.
 2. **Confidence bar color.** Mockup shows green at or above 75 % and amber below (the brief said orange). Images win: green
    (`#16A34A`) at >= 75 %, amber (`#CA8A04`) below.
 3. **Mockup template bugs** (`S-0{{i+24}}`, `{{8+Math.floor(...)}}` in queue and gradebook) are rendered as real data rows.
@@ -152,3 +154,20 @@ approved; S-014, S-022, S-031 exactly as in the review detail frames; class summ
 - `ANTHROPIC_API_KEY` (checkpoint (a) and live grading are blocked without it).
 - A Supabase project (`SUPABASE_URL`, `SUPABASE_SERVICE_KEY`); until then the app runs on `MemoryStore`.
 - The handwritten sample photos and ground truth in `samples/`.
+
+## 7. Decisions made during the build
+
+- **Seed numbers.** Queue counts, flags, S-014/S-022/S-031, error-type counts (Math 12/18/5/3, Science 10/9/22/4),
+  misconception counts (14, 9, 18, 9, 19, 11), most missed criterion, deltas (+3, +2, +8), and the badge (21) match the
+  mockup. The mockup's class averages (38/50, 33/40, 36/50) and per-problem bars are not consistent with its own error
+  counts, so the seed computes them honestly from the seeded papers (Math is about 44/50). Grammar "Grammar rule" errors
+  come out at 32, not 24, for the same reason.
+- **Grammar units.** Each error in the sentence is a "Finds the errors" correction unit (3 points shared), plus one
+  "Correct revision" unit, one "Rule explanation" unit, and one "Spelling check" unit. The mockup labels corrections 2 and 3
+  "Correct revision"; ours label them "Finds the errors" so the rubric recap adds up (2/3, 3/4, 2/2, 1/1 = 8 for S-031).
+- **Most missed criterion** = the criterion with the most root-cause error steps (steps with an error type).
+- **Stretch screen entry points.** Approved papers show "Parent update" and "Student view" buttons in the review top bar
+  (the mockup has no other way to reach those screens).
+- **Flag button** on the review screen leaves the paper flagged and opens the next paper.
+- **Storage.** `MemoryStore` is used when Supabase is not configured; Supabase code is written against the same
+  interface but was not run in this environment (no project credentials).

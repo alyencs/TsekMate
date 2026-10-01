@@ -7,8 +7,9 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
-ROOT = Path(__file__).resolve().parents[3]  # repo root
 API_DIR = Path(__file__).resolve().parents[1]
+# Repo root when running from the monorepo; in a container (only apps/api copied) fall back to the API dir.
+ROOT = API_DIR.parents[1] if len(API_DIR.parents) > 1 and (API_DIR.parents[1] / "apps").exists() else API_DIR
 load_dotenv(ROOT / ".env")
 load_dotenv(API_DIR / ".env")
 
