@@ -74,7 +74,7 @@ def health():
         "ok": True,
         "store": get_store().kind,
         "ai_provider": "anthropic",
-        "ai": "configured" if s.anthropic_api_key else "missing ANTHROPIC_API_KEY",
+        "ai": ("configured" if s.anthropic_api_key else "missing ANTHROPIC_API_KEY") if llm.sdk_installed() else "anthropic package not installed (pip install -r apps/api/requirements.txt)",
         "model": s.anthropic_model,
         "demo_mode": s.demo_mode,
     }
@@ -199,7 +199,7 @@ def _settings_view() -> dict:
     s = get_settings()
     return {
         **app_settings.get(get_store()),
-        "ai": {"provider": "Anthropic Claude", "model": s.anthropic_model, "configured": bool(s.anthropic_api_key), "demo_mode": s.demo_mode},
+        "ai": {"provider": "Anthropic Claude", "model": s.anthropic_model, "configured": bool(s.anthropic_api_key) and llm.sdk_installed(), "demo_mode": s.demo_mode},
     }
 
 

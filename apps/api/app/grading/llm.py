@@ -33,6 +33,18 @@ class LLMError(RuntimeError):
         self.status = status
 
 
+SDK_MISSING = (
+    "The Anthropic Python SDK is not installed in the environment running the API. "
+    "Stop the API, run: pip install -r apps/api/requirements.txt (in the same virtual environment), then restart it."
+)
+
+
+def sdk_installed() -> bool:
+    import importlib.util
+
+    return importlib.util.find_spec("anthropic") is not None
+
+
 _KEY_PATTERN = re.compile(r"sk-ant-[A-Za-z0-9_\-]{8,}")
 
 
@@ -53,6 +65,8 @@ def _client():
     s = get_settings()
     if not s.anthropic_api_key:
         raise LLMUnavailable("ANTHROPIC_API_KEY is not set, so live AI calls are off. Set it in .env (or use DEMO_MODE for the sample set).")
+    if not sdk_installed():
+        raise LLMUnavailable(SDK_MISSING)
     return _client_for(s.anthropic_api_key)
 
 
@@ -108,10 +122,10 @@ def call(messages: list[dict], max_tokens: int = 16000, system: str | None = Non
     Raises LLMUnavailable (no key), LLMError (provider error, safe message), or ValueError (output cut off or empty),
     which the grader treats like malformed output and retries once.
     """
-    import anthropic
-
     s = get_settings()
     client = _client()
+    import anthropic
+
     kwargs: dict = {"model": s.anthropic_model, "max_tokens": max_tokens, "messages": _to_claude(messages)}
     if system:
         kwargs["system"] = system
