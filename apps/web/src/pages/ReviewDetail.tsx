@@ -6,6 +6,8 @@ import type { Criterion, CriterionScore, ProblemResult, SubmissionDetail, Unit, 
 import { AI_LABEL, SUBJECTS, errorTypeLabel } from '../lib/subjects'
 import { fmtScore, timeAgo } from '../lib/format'
 import { rememberActivity } from '../lib/session'
+import { useThreshold } from '../lib/appSettings'
+import { useUnsavedChanges } from '../lib/useUnsavedChanges'
 import { AppShell } from '../components/layout/AppShell'
 import { Badge, SubjectChip } from '../components/ui/Chip'
 import { ConfidenceBar } from '../components/ui/ConfidenceBar'
@@ -40,11 +42,12 @@ function breakdown(pid: string, units: U[], rubric: Criterion[], server: Criteri
   })
 }
 
-function needsCheck(p: ProblemResult) {
+/** Same rule as the server's routing, with the confidence threshold from Settings. */
+function needsCheck(p: ProblemResult, threshold: number) {
   return (
     p.flags.length > 0 ||
-    p.overall_confidence < 0.75 ||
-    p.units.some((u) => u.verdict === 'unclear' || u.confidence < 0.75) ||
+    p.overall_confidence < threshold ||
+    p.units.some((u) => u.verdict === 'unclear' || u.confidence < threshold) ||
     p.criteria_scores.some((c) => !c.assessed)
   )
 }
@@ -62,6 +65,8 @@ export default function ReviewDetail() {
   const [saving, setSaving] = useState<'draft' | 'approve' | null>(null)
   const [notice, setNotice] = useState<{ tone: 'ok' | 'bad'; text: string } | null>(null)
   const [approved, setApproved] = useState<{ total: number; max: number } | null>(null)
+  const threshold = useThreshold()
+  const confirmLeave = useUnsavedChanges(dirty)
 
   useEffect(() => {
     let alive = true
@@ -147,8 +152,15 @@ export default function ReviewDetail() {
     setSaving('draft')
     setNotice(null)
     try {
-      await save()
-      setNotice({ tone: 'ok', text: 'Draft saved. Nothing is final until you approve.' })
+      const wasApproved = detail?.status === 'approved'
+      const d = await save()
+      setNotice({
+        tone: 'ok',
+        text:
+          wasApproved && d && d.status !== 'approved'
+            ? 'Saved. Because you changed an approved grade, this paper is back in the review queue: approve it again to update the gradebook.'
+            : 'Draft saved. Nothing is final until you approve.',
+      })
     } catch (e) {
       setNotice({ tone: 'bad', text: (e as Error).message })
     } finally {
@@ -158,6 +170,8 @@ export default function ReviewDetail() {
 
   async function approve() {
     if (!detail) return
+    const handGraded = Object.values(scores).some((v) => v !== null && v !== undefined)
+    if (detail.status === 'failed' && !handGraded && !window.confirm('The AI could not grade this paper and you have not entered any scores. Approve it with 0 points?')) return
     setSaving('approve')
     setNotice(null)
     try {
@@ -172,11 +186,11 @@ export default function ReviewDetail() {
     }
   }
 
-  const back = () => navigate(`/queue?activity=${detail?.activity.id ?? ''}`)
+  const back = () => confirmLeave() && navigate(`/queue?activity=${detail?.activity.id ?? ''}`)
   const [regrading, setRegrading] = useState(false)
 
   async function gradeAgain() {
-    if (!detail) return
+    if (!detail || !confirmLeave()) return
     setRegrading(true)
     setNotice(null)
     try {
@@ -224,8 +238,8 @@ export default function ReviewDetail() {
             {detail.activity.problems.map((p) => {
               const r = problems.find((x) => x.problem_id === p.id)
               const sel = p.order === prob.order
-              const clean = r && !needsCheck(r) && r.suggested_score === r.max_score
-              const flag = r && needsCheck(r)
+              const clean = r && !needsCheck(r, threshold) && r.suggested_score === r.max_score
+              const flag = r && needsCheck(r, threshold)
               return (
                 <button
                   key={p.id}
@@ -375,7 +389,7 @@ export default function ReviewDetail() {
                 className="flex h-14 w-12 items-center justify-center rounded-ctl text-gray-500 hover:bg-gray-100"
                 title="Leave flagged and go to the next paper"
                 aria-label="Leave this paper flagged and go to the next paper"
-                onClick={() => (detail.next_submission ? navigate(`/submissions/${detail.next_submission.id}`) : back())}
+                onClick={() => (detail.next_submission ? confirmLeave() && navigate(`/submissions/${detail.next_submission.id}`) : back())}
               >
                 <FlagTriangleRight className="h-5 w-5" />
               </button>

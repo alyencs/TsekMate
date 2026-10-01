@@ -3,7 +3,8 @@ import { BookOpenText, History, Layers, LayoutGrid, LogOut, Presentation, Settin
 import type { ReactNode } from 'react'
 import { Avatar, Logo } from '../ui/Logo'
 import { SUBJECTS, SUBJECT_LIST } from '../../lib/subjects'
-import { getTeacher, signOut } from '../../lib/session'
+import { getTeacher } from '../../lib/session'
+import { logOut } from '../../lib/api'
 
 export type NavKey = 'dashboard' | 'activities' | 'queue' | 'summary' | 'gradebook' | 'settings' | 'profile'
 
@@ -77,8 +78,8 @@ export function Sidebar({ active, variant, queueBadge }: { active?: NavKey; vari
             <FooterButton
               icon={<LogOut className="h-[18px] w-[18px]" aria-hidden />}
               label="Log out"
-              onClick={() => {
-                signOut()
+              onClick={async () => {
+                await logOut()
                 navigate('/signin')
               }}
             />

@@ -19,9 +19,12 @@ export default function Grading() {
   const [error, setError] = useState<string | null>(null)
   const timer = useRef<number>()
   const saverRef = useRef(false)
+  const [round, setRound] = useState(0) // restarts polling after "Grade remaining papers"
+  const [restarting, setRestarting] = useState(false)
 
   useEffect(() => {
     let alive = true
+    let failures = 0
     const tick = async () => {
       try {
         const p = await api.gradingProgress(id)
@@ -29,12 +32,17 @@ export default function Grading() {
         setProg(p)
         saverRef.current = !!p.saver
         setError(null)
-        if (!p.running && p.total > 0 && p.done >= p.total) {
+        failures = 0
+        if (!p.running && p.total > 0 && p.done >= p.total && !p.items.some((i) => i.state === 'stopped')) {
           timer.current = window.setTimeout(() => navigate(returnTo ? `/submissions/${returnTo}` : `/queue?activity=${id}`), 1400)
           return
         }
+        // Nothing is running any more: stop asking. The page shows what is left and how to continue.
+        if (!p.running) return
       } catch (e) {
-        if (alive) setError((e as Error).message)
+        if (!alive) return
+        setError((e as Error).message)
+        if (++failures >= 5) return // the server is unreachable: stop polling; the error stays on screen
       }
       // Saver results arrive in one go after minutes to hours, so there is no need to ask every second.
       if (alive) timer.current = window.setTimeout(tick, saverRef.current ? 15000 : 1200)
@@ -44,7 +52,20 @@ export default function Grading() {
       alive = false
       window.clearTimeout(timer.current)
     }
-  }, [id, navigate, returnTo])
+  }, [id, navigate, returnTo, round])
+
+  async function gradeRemaining() {
+    setRestarting(true)
+    try {
+      await api.startGrading(id)
+      setError(null)
+      setRound((r) => r + 1)
+    } catch (e) {
+      setError((e as Error).message)
+    } finally {
+      setRestarting(false)
+    }
+  }
 
   const total = prog?.total ?? 0
   const done = prog?.done ?? 0
@@ -55,6 +76,8 @@ export default function Grading() {
   const windowed = items.slice(start, start + 5)
   const short = (activity.data?.title ?? '').split(':')[0].replace(/^Solving /, '')
   const failed = items.filter((i) => i.state === 'failed').length
+  const stopped = items.filter((i) => i.state === 'stopped').length
+  const halted = !!prog && !prog.running && (stopped > 0 || (total > 0 && done < total))
   const saver = prog?.saver ?? null
 
   return (
@@ -104,6 +127,11 @@ export default function Grading() {
                       <Hourglass className="h-4 w-4" aria-hidden /> Waiting
                     </span>
                   )}
+                  {i.state === 'stopped' && (
+                    <span className="flex items-center gap-1.5 text-[15px] font-semibold text-muted">
+                      <CircleX className="h-4 w-4" aria-hidden /> Not graded
+                    </span>
+                  )}
                   {i.state === 'failed' && (
                     <span className="flex items-center gap-1.5 text-[15px] font-semibold text-bad-strong">
                       <CircleX className="h-4 w-4" aria-hidden /> Needs teacher
@@ -118,7 +146,23 @@ export default function Grading() {
               {failed} paper{failed === 1 ? '' : 's'} could not be graded automatically. Open {failed === 1 ? 'it' : 'them'} from the queue and press Grade again, or grade by hand.
             </p>
           )}
-          {total === 0 && prog && (
+          {halted && (
+            <div className="mt-6 rounded-card border border-line bg-[#F9F7F5] px-5 py-4 text-left" role="status">
+              <p className="text-[15px] font-semibold">Grading stopped before every paper was checked.</p>
+              <p className="mt-1 text-[13px] text-muted">
+                This happens when the server restarts during grading. Nothing was lost: {prog?.pending ?? stopped} paper{(prog?.pending ?? stopped) === 1 ? ' is' : 's are'} waiting to be graded.
+              </p>
+              <div className="mt-4 flex gap-3">
+                <Button onClick={gradeRemaining} loading={restarting} disabled={!prog?.pending}>
+                  Grade remaining papers
+                </Button>
+                <Button variant="secondary" onClick={() => navigate(`/queue?activity=${id}`)}>
+                  Go to the review queue
+                </Button>
+              </div>
+            </div>
+          )}
+          {total === 0 && prog && !halted && (
             <Button className="mt-8" onClick={() => navigate(`/queue?activity=${id}`)}>
               Go to the review queue
             </Button>

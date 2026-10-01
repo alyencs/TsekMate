@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { Check, CircleCheck, CircleX, Sparkles } from 'lucide-react'
 import { api } from '../lib/api'
 import { setTeacher } from '../lib/session'
@@ -7,10 +7,12 @@ import { Button } from '../components/ui/Button'
 
 export default function SignIn() {
   const navigate = useNavigate()
+  const [params] = useSearchParams()
+  const from = params.get('from')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [remember, setRemember] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(params.get('expired') ? 'Your session has ended. Please sign in again.' : null)
   const [loading, setLoading] = useState(false)
 
   async function submit(e: FormEvent) {
@@ -20,7 +22,8 @@ export default function SignIn() {
     try {
       const t = await api.signIn(email, password)
       setTeacher(t, remember)
-      navigate('/')
+      // only same-app paths: never navigate to another origin taken from the URL
+      navigate(from && /^\/(?![/\\])/.test(from) && !from.includes('\\') && !from.startsWith('/signin') ? from : '/')
     } catch (err) {
       setError((err as Error).message)
     } finally {
@@ -75,7 +78,7 @@ export default function SignIn() {
             />
             <label className="mt-6 flex items-center gap-12 text-[14px] text-gray-600">
               <input type="checkbox" checked={remember} onChange={(e) => setRemember(e.target.checked)} className="h-5 w-5 rounded border-gray-400 accent-brand" />
-              Remember me for 30 days
+              Keep me signed in on this device
             </label>
             {error && (
               <p role="alert" className="mt-5 flex items-center gap-2 rounded-ctl border border-bad-border bg-bad-bg px-3 py-2 text-[14px] text-bad-text">

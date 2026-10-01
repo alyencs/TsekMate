@@ -10,10 +10,16 @@ const listeners = new Set<(s: AppSettings) => void>()
 export function loadSettings(force = false): Promise<AppSettings> {
   if (cache && !force) return Promise.resolve(cache)
   if (!inflight || force)
-    inflight = api.settings().then((s) => {
-      setSettingsCache(s)
-      return s
-    })
+    inflight = api
+      .settings()
+      .then((s) => {
+        setSettingsCache(s)
+        return s
+      })
+      .catch((e) => {
+        inflight = null // a failed request is not cached: the next caller tries again
+        throw e
+      })
   return inflight
 }
 

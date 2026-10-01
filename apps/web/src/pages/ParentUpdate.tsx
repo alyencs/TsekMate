@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { Info, Send } from 'lucide-react'
+import { Info, RefreshCw, Send, Sparkles } from 'lucide-react'
 import { api } from '../lib/api'
 import type { ParentMessage } from '../lib/types'
 import { useAsync } from '../lib/useAsync'
@@ -20,19 +20,35 @@ export default function ParentUpdate() {
   const [error, setError] = useState<string | null>(null)
   const [sent, setSent] = useState<string | null>(null)
   const [sending, setSending] = useState(false)
+  const [drafting, setDrafting] = useState(false)
 
-  const generate = () => {
+  // Opening the page only loads the saved draft. The AI is called when the teacher asks for a draft.
+  const load = () => {
     setError(null)
     setMsg(null)
     api
-      .parentMessage(id)
+      .savedParentMessage(id)
       .then((m) => {
         setMsg(m)
         setText({ en: m.en, fil: m.fil })
       })
       .catch((e: Error) => setError(e.message))
   }
-  useEffect(generate, [id])
+  useEffect(load, [id])
+
+  async function generate() {
+    setDrafting(true)
+    setError(null)
+    try {
+      const m = await api.parentMessage(id)
+      setMsg(m)
+      setText({ en: m.en, fil: m.fil })
+    } catch (e) {
+      setError((e as Error).message)
+    } finally {
+      setDrafting(false)
+    }
+  }
 
   async function send() {
     setSending(true)
@@ -80,9 +96,18 @@ export default function ParentUpdate() {
           </div>
           <div className="px-8 py-8">
             {error ? (
-              <ErrorState message={error} onRetry={generate} />
-            ) : !msg ? (
+              <ErrorState message={error} onRetry={msg ? generate : load} />
+            ) : drafting ? (
               <Loading label="Drafting a short, kind update…" />
+            ) : !msg ? (
+              <Loading label="Loading…" />
+            ) : !msg.drafted ? (
+              <div className="flex flex-col items-center gap-4 py-6 text-center">
+                <p className="text-[15px] text-muted">No message drafted yet for this paper.</p>
+                <Button onClick={generate} icon={<Sparkles className="h-4 w-4" aria-hidden />}>
+                  Draft a message with AI
+                </Button>
+              </div>
             ) : (
               <>
                 <label htmlFor="msg" className="sr-only">
@@ -111,13 +136,20 @@ export default function ParentUpdate() {
           </p>
         )}
         <div className="mt-8 flex gap-4">
-          <Button size="lg" className="h-[60px] flex-1 text-[17px] shadow-md" iconRight={<Send className="h-4 w-4" aria-hidden />} onClick={send} loading={sending} disabled={!msg || !!sent || !text[lang].trim()}>
+          <Button size="lg" className="h-[60px] flex-1 text-[17px] shadow-md" iconRight={<Send className="h-4 w-4" aria-hidden />} onClick={send} loading={sending} disabled={!msg?.drafted || !!sent || !text[lang].trim()}>
             Approve and send message
           </Button>
-          <Button size="lg" variant="secondary" className="h-[60px] w-28 text-[17px]" onClick={() => (sent ? navigate(-1) : setEditing((e) => !e))} disabled={!msg}>
+          <Button size="lg" variant="secondary" className="h-[60px] w-28 text-[17px]" onClick={() => (sent ? navigate(-1) : setEditing((e) => !e))} disabled={!msg?.drafted}>
             {sent ? 'Back' : editing ? 'Done' : 'Edit'}
           </Button>
         </div>
+        {msg?.drafted && !sent && (
+          <div className="mt-4 text-center">
+            <Button variant="link" onClick={generate} disabled={drafting} icon={<RefreshCw className="h-3.5 w-3.5" aria-hidden />}>
+              Draft a new version with AI
+            </Button>
+          </div>
+        )}
         <p className="mt-10 text-center text-[13px] text-muted">Parents will receive this via the TsekMate Parent App or SMS.</p>
       </div>
     </AppShell>
