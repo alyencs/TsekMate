@@ -93,9 +93,24 @@ TsekMate calls Claude from the **backend only**; the browser never sees the key.
    `python scripts/grade.py samples/synthetic/math-synthetic-01.jpg --activity act-linear-eq-quiz1`.
 
 How it is called: one Messages API request per paper with the photo as a base64 image block (PDFs as a document
-block) plus the versioned prompt from `apps/api/prompts/` (`grade_v1.2.txt`), then Pydantic validation, one retry with
+block) plus the versioned prompt from `apps/api/prompts/` (`grade_v1.3.txt`), then Pydantic validation, one retry with
 the validation error, and code-side score recompute (`apps/api/app/grading/llm.py`, `grader.py`). The SDK retries
 429, 5xx, and connection errors with backoff; `GRADING_WORKERS` (default 2) limits parallel calls.
+
+Keeping token costs down (`apps/api/app/grading/images.py`, `apps/api/app/services/batches.py`):
+- **Token usage** of every call is logged and stored per paper in `ai_results.usage` (`input_tokens`, `output_tokens`,
+  and `batch_input_tokens` / `batch_output_tokens` for tokens billed at the batch price).
+- **Smaller output.** Prompt v1.3 no longer asks the model for the answer key, per-step maximums, or problem totals
+  (the server sets or recomputes all of them) and asks for compact JSON with no indentation.
+- **Smaller photos.** Photos are shrunk to 1568 px on the long edge (the most Claude Haiku 4.5 reads) and turned
+  upright before sending. The tokens are the same; the requests are much smaller. The stored photo is unchanged.
+- **Saver grading.** Settings → *Grading speed*: *Saver* sends "Grade all" through the Message Batches API, which bills
+  every token at half price. Results usually arrive within an hour (at most 24 hours); the grading screen shows when it
+  was sent and an estimate of the time left, and a notification is sent when the drafts are ready. Batches are saved
+  in `grading_batches`, so a restart keeps checking them. A reply that fails validation gets its retry live; papers the
+  batch could not grade are graded live. *Grade again* on one paper is always live. *Fast* is the default.
+- Prompt caching is not used: Claude Haiku 4.5 caches only prompts of 4,096 tokens or more, and the grading prompt is
+  about 2,000.
 
 Errors reach the teacher without exposing the key: missing key, rejected key, permission denied, unknown model, rate
 limit (HTTP 429), no credit, timeout, connection error, provider outage, refusal, cut-off or malformed JSON (retried
@@ -123,8 +138,9 @@ uvicorn app.main:app --port 8000
    `notifications` and `app_settings` tables. Then run `003_rubric_total_criterion_scores.sql`: it adds
    `rubrics.total_points` (filled from each rubric's criteria, so existing rubrics are kept and nothing is re-scored)
    and `teacher_reviews.criterion_scores`. Older per-problem overrides (`problem_scores`) keep their scores: they are
-   spread over the criteria on read and converted on the teacher's next edit. Both migrations are safe to run more
-   than once.
+   spread over the criteria on read and converted on the teacher's next edit. Then run
+   `004_token_usage_and_batches.sql`: it adds `ai_results.usage` and the `grading_batches` table (Saver grading).
+   All migrations are safe to run more than once.
 3. Put `SUPABASE_URL` and `SUPABASE_SERVICE_KEY` (service role, server side only) in `.env`.
 4. Seed or reset with one command: `python scripts/seed.py --reset`
 
@@ -150,6 +166,7 @@ Seeded activity ids: `act-linear-eq-quiz1`, `act-forces-motion-quiz2`, `act-sva-
 | `ANTHROPIC_API_KEY` | (none) | Anthropic API key (backend only). Required for live grading |
 | `ANTHROPIC_MODEL` | `claude-haiku-4-5` | Claude model for grading, rubric drafts, summaries |
 | `GRADING_WORKERS` | `2` | Papers graded in parallel |
+| `BATCH_POLL_SECONDS` | `30` | How often Saver grading checks for batch results |
 | `SUPABASE_URL`, `SUPABASE_SERVICE_KEY` | (none) | Database and private storage. Empty = in-memory test store |
 | `SUPABASE_BUCKET` | `submissions` | Private bucket name |
 | `VITE_API_URL` | `http://localhost:8000` | Where the web app finds the API |
@@ -182,7 +199,7 @@ Never commit `.env`.
   invented. The rubric can be edited on the Upload page until the first paper is graded, then it is locked so every
   paper uses the same rubric; grading refuses a rubric that does not add up. Every AI result is scored against that
   rubric in code: each step's maximum is the criterion's rubric points, a criterion never exceeds its points, and the
-  prompt (`grade_v1.2.txt`) requires every criterion in every problem. If the AI still skips one, it is retried once,
+  prompt (`grade_v1.3.txt`) requires every criterion in every problem. If the AI still skips one, it is retried once,
   then the criterion is shown at 0 marked *Not scored by the AI · please score it* and the paper goes to Needs review.
   The Review screen lists every criterion with its exact maximum; the teacher types a score per criterion (0 to its
   points) and the problem score is always the sum. Approval, the gradebook, and the class summary use the same sums.
@@ -261,8 +278,9 @@ Supabase (PostgreSQL + Storage)                       apps/api/db/schema.sql, db
 
 - **One call per paper** with the problems, answer key, sample solutions, rubric (criteria, points, descriptions),
   settings, and the allowed error types in the prompt. Prompts are versioned text files in
-  [`apps/api/prompts/`](apps/api/prompts/): `grade_v1.2.txt` (v1.1 plus "every rubric criterion must be assessed";
-  v1.1 added the identity fields; older versions are kept),
+  [`apps/api/prompts/`](apps/api/prompts/): `grade_v1.3.txt` (v1.2 without the totals the server recomputes, and
+  compact JSON; v1.2 added "every rubric criterion must be assessed"; v1.1 added the identity fields; older versions
+  are kept),
   `rubric_v1.0.txt`, `summary_v1.0.txt`, `parent_v1.0.txt`, `practice_v1.0.txt`.
 - **Prompt-injection safety**: everything on the paper is student work, never instructions.
 - **Identity never changes the grade**: the prompt says so, the schema parses identity leniently (bad or missing
@@ -365,7 +383,8 @@ docs: `http://localhost:8000/docs`.
 - One teacher account, no real authentication; the student view is a teacher-side preview. Profile edits change the
   display name and department only.
 - The in-memory store loses data on restart; use Supabase for anything that should persist. The Supabase code path
-  (including migrations 002 and 003) has not been run against a real project yet.
+  (including migrations 002, 003 and 004) has not been run against a real project yet. Saver grading has been tested
+  with a stand-in Batch API client only.
 - The gradebook and adapter are mocks. Not legal advice on data privacy.
 
 ## History

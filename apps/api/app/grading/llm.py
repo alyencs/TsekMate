@@ -129,25 +129,31 @@ def _map_api_error(e, model: str) -> LLMError:
     return LLMError("Something went wrong while grading. Press Grade again, or grade this paper by hand.", 502, f"{name}: {msg}")
 
 
-def call(messages: list[dict], max_tokens: int = 16000, system: str | None = None) -> str:
-    """Single Messages API call. Returns the concatenated text blocks.
-
-    Raises LLMUnavailable (no key), LLMError (provider error, safe message), or ValueError (output cut off or empty),
-    which the grader treats like malformed output and retries once.
-    """
-    s = get_settings()
-    client = _client()
-    import anthropic
-
-    kwargs: dict = {"model": s.anthropic_model, "max_tokens": max_tokens, "messages": _to_claude(messages)}
+def request_params(messages: list[dict], max_tokens: int = 16000, system: str | None = None) -> dict:
+    """The Messages API request body. Shared by live calls and the Batch API (services/batches.py)."""
+    kwargs: dict = {"model": get_settings().anthropic_model, "max_tokens": max_tokens, "messages": _to_claude(messages)}
     if system:
         kwargs["system"] = system
-    try:
-        resp = client.messages.create(**kwargs)
-    except anthropic.APIError as e:
-        err = _map_api_error(e, s.anthropic_model)
-        log.warning("AI provider error: %s", err.detail)
-        raise err from None
+    return kwargs
+
+
+USAGE_FIELDS = ("input_tokens", "output_tokens", "cache_creation_input_tokens", "cache_read_input_tokens")
+
+
+def add_usage(acc: dict | None, usage, batch: bool = False) -> None:
+    """Add one response's token usage to `acc`. Batch tokens are kept apart because they are billed at half price."""
+    if acc is None or usage is None:
+        return
+    prefix = "batch_" if batch else ""
+    for f in USAGE_FIELDS:
+        n = int(getattr(usage, f, 0) or 0)
+        if n:
+            acc[prefix + f] = acc.get(prefix + f, 0) + n
+    acc["calls"] = acc.get("calls", 0) + 1
+
+
+def reply_text(resp) -> str:
+    """The text of a Messages API response. Raises LLMError (refusal) or ValueError (cut off or empty)."""
     if resp.stop_reason == "refusal":
         raise LLMError("The AI couldn't grade this paper. Please grade it by hand.", 422, "stop_reason=refusal")
     text = "".join(b.text for b in resp.content if getattr(b, "type", "") == "text")
@@ -156,6 +162,30 @@ def call(messages: list[dict], max_tokens: int = 16000, system: str | None = Non
     if not text.strip():
         raise ValueError("The model returned an empty response.")
     return text
+
+
+def call(messages: list[dict], max_tokens: int = 16000, system: str | None = None, usage: dict | None = None) -> str:
+    """Single Messages API call. Returns the concatenated text blocks.
+
+    Token usage is logged and, when `usage` is given, added to it.
+    Raises LLMUnavailable (no key), LLMError (provider error, safe message), or ValueError (output cut off or empty),
+    which the grader treats like malformed output and retries once.
+    """
+    s = get_settings()
+    client = _client()
+    import anthropic
+
+    try:
+        resp = client.messages.create(**request_params(messages, max_tokens, system))
+    except anthropic.APIError as e:
+        err = _map_api_error(e, s.anthropic_model)
+        log.warning("AI provider error: %s", err.detail)
+        raise err from None
+    u = getattr(resp, "usage", None)
+    if u is not None:
+        log.info("AI usage: input=%s output=%s", getattr(u, "input_tokens", "?"), getattr(u, "output_tokens", "?"))
+    add_usage(usage, u)
+    return reply_text(resp)
 
 
 def image_block(data: bytes, media_type: str) -> dict:

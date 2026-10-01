@@ -59,7 +59,7 @@ def fake_llm(monkeypatch):
     replies: list[str] = []
     calls: list[list] = []
 
-    def fake_call(messages, max_tokens=16000, system=None):
+    def fake_call(messages, max_tokens=16000, system=None, usage=None):
         calls.append(messages)
         return replies.pop(0)
 

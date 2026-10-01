@@ -31,6 +31,8 @@ async def lifespan(_app: FastAPI):
         counts = build(store)
         logging.getLogger("tsekmate").info("In-memory store seeded: %s", counts)
     app_settings.apply(store)
+    if jobs.batches.processing(store):  # Saver grading sent before a restart: keep checking for its results
+        jobs.batches.ensure_poller(store)
     yield
 
 

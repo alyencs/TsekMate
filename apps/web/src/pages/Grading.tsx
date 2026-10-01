@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
-import { CircleCheck, CircleX, Hourglass, Loader2, Sparkles } from 'lucide-react'
+import { BellRing, CircleCheck, CircleX, Clock, Hourglass, Loader2, Sparkles } from 'lucide-react'
 import { api } from '../lib/api'
-import type { GradingProgress } from '../lib/types'
+import { clockTime, duration } from '../lib/format'
+import type { GradingProgress, SaverStatus } from '../lib/types'
 import { useAsync } from '../lib/useAsync'
 import { AppShell } from '../components/layout/AppShell'
 import { ErrorState } from '../components/ui/States'
@@ -17,6 +18,7 @@ export default function Grading() {
   const [prog, setProg] = useState<GradingProgress | null>(null)
   const [error, setError] = useState<string | null>(null)
   const timer = useRef<number>()
+  const saverRef = useRef(false)
 
   useEffect(() => {
     let alive = true
@@ -25,6 +27,7 @@ export default function Grading() {
         const p = await api.gradingProgress(id)
         if (!alive) return
         setProg(p)
+        saverRef.current = !!p.saver
         setError(null)
         if (!p.running && p.total > 0 && p.done >= p.total) {
           timer.current = window.setTimeout(() => navigate(returnTo ? `/submissions/${returnTo}` : `/queue?activity=${id}`), 1400)
@@ -33,7 +36,8 @@ export default function Grading() {
       } catch (e) {
         if (alive) setError((e as Error).message)
       }
-      if (alive) timer.current = window.setTimeout(tick, 1200)
+      // Saver results arrive in one go after minutes to hours, so there is no need to ask every second.
+      if (alive) timer.current = window.setTimeout(tick, saverRef.current ? 15000 : 1200)
     }
     tick()
     return () => {
@@ -51,6 +55,7 @@ export default function Grading() {
   const windowed = items.slice(start, start + 5)
   const short = (activity.data?.title ?? '').split(':')[0].replace(/^Solving /, '')
   const failed = items.filter((i) => i.state === 'failed').length
+  const saver = prog?.saver ?? null
 
   return (
     <AppShell active="queue" contentClassName="flex items-start justify-center px-8 py-[140px]">
@@ -66,6 +71,7 @@ export default function Grading() {
             {total === 0 ? 'Nothing to check' : returnTo ? 'Grading this paper again' : `TsekMate is checking ${total} paper${total === 1 ? '' : 's'}`}
           </h1>
           <p className="mt-3 text-[15px] text-muted">Our AI is analyzing every step of the students&apos; work against your rubric.</p>
+          {saver && <SaverNotice saver={saver} />}
 
           <div className="mt-10 flex items-center justify-between text-[15px]">
             <span className="font-semibold" aria-live="polite" aria-atomic="true">
@@ -121,5 +127,31 @@ export default function Grading() {
         </section>
       )}
     </AppShell>
+  )
+}
+
+function SaverNotice({ saver }: { saver: SaverStatus }) {
+  const when =
+    saver.eta_seconds !== null
+      ? `About ${duration(saver.eta_seconds)} left`
+      : `Taking longer than usual. Results will be ready by ${clockTime(saver.deadline)} at the latest`
+  const basis =
+    saver.eta_basis === 'progress'
+      ? 'Estimated from the papers graded so far.'
+      : saver.eta_basis === 'history'
+        ? 'Estimated from how long your earlier Saver grading took.'
+        : 'Saver grading usually finishes within an hour (at most 24 hours).'
+  return (
+    <div className="mt-6 rounded-card border border-line bg-brand-light/40 px-5 py-4 text-left" role="status" aria-live="polite">
+      <p className="flex items-center gap-2 text-[15px] font-semibold">
+        <Clock className="h-4 w-4 text-brand" aria-hidden /> {when}
+      </p>
+      <p className="mt-1 text-[13px] text-muted">
+        Saver mode (half price). Sent at {clockTime(saver.submitted_at)}. {basis}
+      </p>
+      <p className="mt-2 flex items-center gap-2 text-[13px] text-muted">
+        <BellRing className="h-3.5 w-3.5" aria-hidden /> You can close this page. You&apos;ll get a notification when the drafts are ready.
+      </p>
+    </div>
   )
 }

@@ -15,6 +15,9 @@ def defaults() -> dict:
         "default_accept_alternate": True,
         "default_rubric_mode": "manual",
         "delete_images_on_approve": get_settings().delete_images_on_approve,
+        # "fast": graded right away at the standard price. "saver": "Grade all" goes through the Batch API at half
+        # price, usually within an hour (at most 24 hours).
+        "grading_mode": "fast",
     }
 
 

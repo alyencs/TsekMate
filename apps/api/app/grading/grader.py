@@ -10,10 +10,10 @@ from pydantic import ValidationError
 
 from ..config import API_DIR, get_settings
 from ..models import ERROR_TYPES, PaperOut
-from . import llm
+from . import images, llm
 from .scoring import clean_problem, paper_confidence, paper_flags, route
 
-PROMPT_VERSION = "v1.2"  # v1.1: student identity; v1.2: every rubric criterion must be assessed
+PROMPT_VERSION = "v1.3"  # v1.1: student identity; v1.2: every rubric criterion must be assessed; v1.3: no totals, compact JSON
 PROMPT_FILE = API_DIR / "prompts" / f"grade_{PROMPT_VERSION}.txt"
 
 NOUNS = {
@@ -134,8 +134,25 @@ def _cache_path(h: str) -> Path:
     return get_settings().demo_cache_dir / f"{h}.json"
 
 
-def grade_image(data: bytes, media_type: str, activity: dict, problems: list[dict], rubric: list[dict]) -> dict:
+def demo_cached(data: bytes) -> bool:
+    """True when DEMO_MODE will answer this paper from samples/cache without calling the AI."""
+    return get_settings().demo_mode and _cache_path(image_hash(data)).exists()
+
+
+def build_messages(data: bytes, media_type: str, activity: dict, problems: list[dict], rubric: list[dict]) -> list[dict]:
+    """The grading request for one paper: the (shrunk) photo, then the prompt."""
+    data, media_type = images.prepare(data, media_type)
+    block = llm.pdf_block(data) if media_type == "application/pdf" else llm.image_block(data, media_type)
+    return [{"role": "user", "content": [block, {"type": "text", "text": build_prompt(activity, problems, rubric)}]}]
+
+
+def grade_image(data: bytes, media_type: str, activity: dict, problems: list[dict], rubric: list[dict],
+                first_response=None, usage: dict | None = None) -> dict:
     """Grade one paper. Returns an ai_results-shaped dict (without ids) plus 'status'.
+
+    `first_response` is a Messages API response that was already produced (by the Batch API, see services/batches.py);
+    it is checked like a live reply, and only the retry, if one is needed, is a live call.
+    `usage` collects token counts and is stored with the result.
 
     On invalid JSON: retry once with the validation error appended. If that fails too, the paper is marked
     'failed' with the flag 'grading_failed' so the teacher grades it by hand.
@@ -143,19 +160,22 @@ def grade_image(data: bytes, media_type: str, activity: dict, problems: list[dic
     s = get_settings()
     h = image_hash(data)
     started = datetime.now(timezone.utc).isoformat()
+    usage = {} if usage is None else usage
 
     if s.demo_mode and _cache_path(h).exists():
         cached = json.loads(_cache_path(h).read_text())
         return _finish(fill_missing(cached["raw_json"], rubric), activity, problems, rubric, cached.get("model", "demo-cache"), started, cached=True)
 
-    prompt = build_prompt(activity, problems, rubric)
-    block = llm.pdf_block(data) if media_type == "application/pdf" else llm.image_block(data, media_type)
-    messages: list[dict] = [{"role": "user", "content": [block, {"type": "text", "text": prompt}]}]
+    messages = build_messages(data, media_type, activity, problems, rubric)
     last_error = ""
     reply = ""
     for attempt in range(2):
         try:
-            reply = llm.call(messages)
+            if attempt == 0 and first_response is not None:
+                llm.add_usage(usage, getattr(first_response, "usage", None), batch=True)
+                reply = llm.reply_text(first_response)
+            else:
+                reply = llm.call(messages, usage=usage)
             raw = llm.extract_json(reply)
             out = _validate(raw, activity, problems, rubric)
             gaps = missing_criteria(out, rubric)
@@ -163,7 +183,7 @@ def grade_image(data: bytes, media_type: str, activity: dict, problems: list[dic
                 raise ValueError("Every rubric criterion must be assessed. Missing: " + "; ".join(f"{pid}: {', '.join(c)}" for pid, c in gaps.items()))
             if gaps:
                 raw = fill_missing(raw, rubric)
-            result = _finish(raw, activity, problems, rubric, s.anthropic_model, started)
+            result = _finish(raw, activity, problems, rubric, s.anthropic_model, started, usage=usage)
             if s.demo_mode:
                 s.demo_cache_dir.mkdir(parents=True, exist_ok=True)
                 _cache_path(h).write_text(json.dumps({"model": s.anthropic_model, "raw_json": raw}, indent=1))
@@ -180,13 +200,18 @@ def grade_image(data: bytes, media_type: str, activity: dict, problems: list[dic
                         "content": f"Your reply did not pass validation:\n{last_error}\nReturn the corrected JSON object only.",
                     },
                 ]
-    return failed_result(activity, problems, rubric, s.anthropic_model, started, last_error, reply)
+    return failed_result(activity, problems, rubric, s.anthropic_model, started, last_error, reply, usage=usage)
 
 
-def _finish(raw: dict, activity: dict, problems: list[dict], rubric: list[dict], model: str, started: str, cached: bool = False) -> dict:
+def _finish(raw: dict, activity: dict, problems: list[dict], rubric: list[dict], model: str, started: str, cached: bool = False,
+            usage: dict | None = None) -> dict:
     out = _validate(raw, activity, problems, rubric)
-    order = {p["id"]: p["position"] for p in problems}
-    cleaned = [clean_problem(p.model_dump(), rubric) for p in sorted(out.problems, key=lambda p: order[p.problem_id])]
+    by_id = {p["id"]: p for p in problems}
+    cleaned = []
+    for p in sorted(out.problems, key=lambda p: by_id[p.problem_id]["position"]):
+        d = p.model_dump()
+        d["expected_answer"] = by_id[p.problem_id]["expected_answer"]  # from the answer key, not the model
+        cleaned.append(clean_problem(d, rubric))
     return {
         "problem_results": cleaned,
         "suggested_score": round(sum(p["suggested_score"] for p in cleaned), 2),
@@ -198,6 +223,7 @@ def _finish(raw: dict, activity: dict, problems: list[dict], rubric: list[dict],
         "raw_json": raw,
         "created_at": started,
         "identity": out.identity(),  # separate from grading confidence; never affects scores or routing
+        "usage": usage or {},  # token counts for this paper (see llm.add_usage); empty for the demo cache
         "status": route(cleaned),
     }
 
@@ -206,7 +232,7 @@ INCOMPLETE = "The AI's answer for this paper was incomplete. Press Grade again, 
 
 
 def failed_result(activity: dict, problems: list[dict], rubric: list[dict], model: str, started: str, error: str, reply: str = "",
-                  teacher_message: str = INCOMPLETE) -> dict:
+                  teacher_message: str = INCOMPLETE, usage: dict | None = None) -> dict:
     """A 'needs teacher' result. `error` is the technical reason (stored, backend only); `teacher_message` is shown."""
     total = sum(float(c["points"]) for c in rubric)
     cleaned = [
@@ -233,6 +259,7 @@ def failed_result(activity: dict, problems: list[dict], rubric: list[dict], mode
         "prompt_version": PROMPT_VERSION,
         "raw_json": {"error": error, "teacher_message": teacher_message, "reply": reply[:4000]},
         "identity": {"student_name": None, "student_id": None, "identity_confidence": 0.0},
+        "usage": usage or {},
         "created_at": started,
         "status": "failed",
     }

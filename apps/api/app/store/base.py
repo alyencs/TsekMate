@@ -22,6 +22,7 @@ TABLES = [
     "parent_messages",
     "notifications",
     "app_settings",
+    "grading_batches",
 ]
 
 

@@ -24,7 +24,7 @@ def test_evaluate_metrics_with_stub(monkeypatch):
             ]
             probs.append({"problem_id": gp["problem_id"], "expected_answer": "", "units": units, "suggested_score": 0, "max_score": 10, "overall_confidence": 0.9, "flags": [], "student_hint": ""})
         queue.append(json.dumps({"problems": probs}))
-    monkeypatch.setattr(llm, "call", lambda messages, max_tokens=16000, system=None: queue.pop(0))
+    monkeypatch.setattr(llm, "call", lambda messages, max_tokens=16000, system=None, usage=None: queue.pop(0))
     r = evaluate.evaluate(items, write_cache=False)
     assert r["rubric_item_agreement"]["rate"] == 1.0
     assert r["transcription_by_style"]["synthetic"]["mean_similarity"] == 1.0

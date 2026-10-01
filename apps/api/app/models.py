@@ -72,7 +72,7 @@ class UnitOut(BaseModel):
     error_type: str | None = None
     criterion: str
     points_awarded: float
-    points_max: float
+    points_max: float = 0  # not asked for since prompt v1.3; the rubric decides it (scoring.clean_problem)
     confidence: float = Field(ge=0, le=1)
     comment: str = ""
     bbox: list[float] | None = None
@@ -89,10 +89,11 @@ class UnitOut(BaseModel):
 
 class ProblemOut(BaseModel):
     problem_id: str
-    expected_answer: str
+    # Not asked for since prompt v1.3: the answer key and the scores come from the activity and are recomputed.
+    expected_answer: str = ""
     units: list[UnitOut]
-    suggested_score: float
-    max_score: float
+    suggested_score: float = 0
+    max_score: float = 0
     overall_confidence: float = Field(ge=0, le=1)
     flags: list[FlagT] = []
     student_hint: str = ""
@@ -188,6 +189,7 @@ class SettingsPatch(BaseModel):
     default_accept_alternate: bool | None = None
     default_rubric_mode: Literal["manual", "ai"] | None = None
     delete_images_on_approve: bool | None = None
+    grading_mode: Literal["fast", "saver"] | None = None
 
 
 class SignIn(BaseModel):

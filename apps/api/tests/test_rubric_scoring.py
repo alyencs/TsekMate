@@ -32,7 +32,7 @@ def ai(monkeypatch):
     monkeypatch.setattr(s, "demo_mode", False)
     state = {"plans": [], "calls": 0, "problems": []}
 
-    def fake_call(messages, max_tokens=16000, system=None):
+    def fake_call(messages, max_tokens=16000, system=None, usage=None):
         plan = state["plans"][min(state["calls"], len(state["plans"]) - 1)]
         state["calls"] += 1
         probs = []

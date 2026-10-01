@@ -1,4 +1,8 @@
-"""Background batch grading. Progress lives in the submissions table (status) plus an in-process job list."""
+"""Background grading of a class set. Progress lives in the submissions table (status) plus an in-process job list.
+
+Fast mode grades papers live, a few at a time. Saver mode ("Grade all" only) sends them through the Batch API at half
+the token price; see services/batches.py.
+"""
 from __future__ import annotations
 
 import logging
@@ -10,7 +14,8 @@ from ..config import get_settings
 from ..grading import grader, llm
 from ..grading.scoring import rubric_problems
 from ..store.base import Store, new_id, now_iso
-from . import notifications, roster
+from . import batches, notifications, roster
+from . import settings as app_settings
 from .core import Bundle, Conflict, NotFound, touch
 
 log = logging.getLogger("tsekmate.jobs")
@@ -47,23 +52,38 @@ def start(store: Store, activity_id: str, only: str | None = None) -> dict:
         ids = [x["id"] for x in todo]
         for sid in ids:
             store.update("submissions", sid, {"status": "grading", "updated_at": now_iso()})
+        # Saver mode is for "Grade all" only; Grade again on one paper is always graded right away.
+        saver = not only and app_settings.get(store).get("grading_mode") == "saver" and batches.available()
         _jobs[activity_id] = {"ids": ids, "running": True, "checking": set(), "retry": bool(only)}
-    threading.Thread(target=_run, args=(store, activity_id, ids, bool(only)), daemon=True).start()
+    threading.Thread(target=_run, args=(store, activity_id, ids, bool(only), saver), daemon=True).start()
     return progress(store, activity_id)
 
 
-def _run(store: Store, activity_id: str, ids: list[str], retry: bool = False) -> None:
+def _run(store: Store, activity_id: str, ids: list[str], retry: bool = False, saver: bool = False) -> None:
+    live = ids
     try:
+        if saver:
+            try:
+                live = batches.submit(store, activity_id, ids)
+            except Exception:  # a batch that can't be sent must not leave papers stuck: grade them live
+                log.exception("could not submit the batch; grading live")
+                sent = {sid for r in batches.processing(store, activity_id) for sid in r["requests"].values()}
+                live = [sid for sid in ids if sid not in sent]
         with ThreadPoolExecutor(max_workers=WORKERS) as pool:
-            list(pool.map(lambda sid: _grade_one(store, activity_id, sid), ids))
+            list(pool.map(lambda sid: _grade_one(store, activity_id, sid), live))
     finally:
         with _lock:
             _jobs[activity_id]["running"] = False
         touch(store, activity_id)
-        try:
-            _notify(store, activity_id, ids, retry)
-        except Exception:  # notifications must never break grading
-            log.exception("could not create grading notification")
+        if set(live) == set(ids):  # papers that went into a batch are announced when it ends (batches.collect)
+            notify_done(store, activity_id, ids, retry)
+
+
+def notify_done(store: Store, activity_id: str, ids: list[str], retry: bool = False) -> None:
+    try:
+        _notify(store, activity_id, ids, retry)
+    except Exception:  # notifications must never break grading
+        log.exception("could not create grading notification")
 
 
 def _notify(store: Store, activity_id: str, ids: list[str], retry: bool) -> None:
@@ -105,7 +125,8 @@ def _grade_one(store: Store, activity_id: str, sub_id: str) -> None:
             _jobs[activity_id]["checking"].discard(sub_id)
 
 
-def grade_submission(store: Store, sub_id: str) -> dict:
+def grade_submission(store: Store, sub_id: str, first_response=None) -> dict:
+    """Grade one paper and save the result. `first_response` is the paper's Batch API reply, when there is one."""
     s = store.get("submissions", sub_id)
     b = Bundle(store, s["activity_id"])
     img = store.get_image(s["image_path"]) if s.get("image_path") else None
@@ -113,7 +134,7 @@ def grade_submission(store: Store, sub_id: str) -> dict:
     try:
         if not img:
             raise FileNotFoundError("image missing from storage")
-        result = grader.grade_image(img[0], img[1], b.activity, b.problems, b.rubric)
+        result = grader.grade_image(img[0], img[1], b.activity, b.problems, b.rubric, first_response=first_response)
     except (llm.LLMUnavailable, llm.LLMError) as e:  # teacher message in str(e), technical reason in e.detail
         log.warning("grading failed for %s: %s", sub_id, e.detail)
         result = grader.failed_result(b.activity, b.problems, b.rubric, model, now_iso(), e.detail, teacher_message=str(e))
@@ -156,11 +177,14 @@ def progress(store: Store, activity_id: str) -> dict:
     errs = rubric_problems(b.rubric, b.rubric_total)
     if errs:  # never grade against a rubric whose points don't add up
         raise Conflict("Fix the rubric before grading. " + " ".join(errs))
+    waiting_batches = batches.processing(store, activity_id)
     with _lock:
         job = _jobs.get(activity_id)
         ids = list(job["ids"]) if job else [s["id"] for s in b.subs if s["status"] in ("grading", "uploaded")]
         checking = set(job["checking"]) if job else set()
-        running = bool(job and job["running"])
+        running = bool(job and job["running"]) or bool(waiting_batches)
+    for r in waiting_batches:  # papers of a Saver batch stay listed even after Grade again on another paper
+        ids += [sid for sid in r["requests"].values() if sid not in ids]
     subs = {s["id"]: s for s in b.subs}
     items = []
     for sid in ids:
@@ -171,4 +195,4 @@ def progress(store: Store, activity_id: str) -> dict:
         state = "checking" if sid in checking else "waiting" if st in ("grading", "uploaded") else "failed" if st == "failed" else "done"
         items.append({"submission_id": sid, "student_id": s.get("student_id"), "student_name": b.student_name(s.get("student_id")), "state": state})
     done = sum(1 for i in items if i["state"] in ("done", "failed"))
-    return {"total": len(items), "done": done, "running": running, "items": items}
+    return {"total": len(items), "done": done, "running": running, "items": items, "saver": batches.eta(store, activity_id)}

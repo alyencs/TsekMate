@@ -232,7 +232,22 @@ export interface GradingProgress {
   done: number
   running: boolean
   items: { submission_id: string; student_id: string | null; student_name: string | null; state: 'done' | 'checking' | 'waiting' | 'failed' }[]
+  /** Set while Saver grading runs (half price, results usually within an hour). */
+  saver: SaverStatus | null
 }
+
+export interface SaverStatus {
+  submitted_at: string
+  /** Seconds left (estimate); null once it is taking longer than estimated. */
+  eta_seconds: number | null
+  eta_basis: 'progress' | 'history' | 'typical'
+  overdue: boolean
+  /** Latest finish time (24 hours after sending). */
+  deadline: string
+  in_batch: number
+}
+
+export type GradingMode = 'fast' | 'saver'
 
 export interface Misconception {
   text: string
@@ -306,6 +321,7 @@ export interface AppSettings {
   default_accept_alternate: boolean
   default_rubric_mode: 'manual' | 'ai'
   delete_images_on_approve: boolean
+  grading_mode: GradingMode
   ai: { available: boolean; demo_mode: boolean }
   rerouted?: number
 }

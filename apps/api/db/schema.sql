@@ -69,6 +69,7 @@ create table if not exists ai_results (
   prompt_version text not null,
   raw_json jsonb,
   identity jsonb,                       -- name / ID read from the paper; separate from grading confidence
+  usage jsonb not null default '{}'::jsonb, -- token counts for this paper (batch_* tokens are billed at half price)
   created_at timestamptz not null default now()
 );
 create index if not exists ai_results_submission on ai_results(submission_id);
@@ -129,6 +130,22 @@ create table if not exists app_settings (
 );
 
 -- The API uses the service key server-side. Enable RLS with no policies so the anon key cannot read anything.
+-- One row per Anthropic message batch ("Saver" grading). Saved so grading picks up again after a restart.
+create table if not exists grading_batches (
+  id text primary key,
+  activity_id text not null references activities(id) on delete cascade,
+  provider_batch_id text not null,
+  requests jsonb not null,               -- {"custom_id": "submission_id"}
+  status text not null default 'processing' check (status in ('processing', 'ended')),
+  total integer not null,
+  done integer not null default 0,
+  model text not null,
+  submitted_at timestamptz not null default now(),
+  ended_at timestamptz
+);
+create index if not exists grading_batches_activity on grading_batches(activity_id);
+create index if not exists grading_batches_status on grading_batches(status);
+
 alter table students enable row level security;
 alter table activities enable row level security;
 alter table problems enable row level security;
@@ -141,6 +158,7 @@ alter table class_summaries enable row level security;
 alter table parent_messages enable row level security;
 alter table notifications enable row level security;
 alter table app_settings enable row level security;
+alter table grading_batches enable row level security;
 
 -- Private bucket for student work images (signed URLs only).
 insert into storage.buckets (id, name, public) values ('submissions', 'submissions', false)

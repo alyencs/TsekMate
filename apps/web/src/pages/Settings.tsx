@@ -128,6 +128,26 @@ export default function Settings() {
                 ))}
               </div>
             </fieldset>
+            <fieldset>
+              <legend className="text-[15px] font-semibold">Grading speed</legend>
+              <p className="mt-0.5 text-[13px] text-muted">
+                How &quot;Grade all&quot; checks a class set. Saver costs half as much but results take longer: usually within an hour, at most 24 hours. You&apos;ll see an estimate
+                and get a notification when the drafts are ready. Grade again on one paper is always fast.
+              </p>
+              <div className="mt-2 flex gap-3">
+                {(
+                  [
+                    ['fast', 'Fast (results in minutes)'],
+                    ['saver', 'Saver (half price, slower)'],
+                  ] as const
+                ).map(([v, l]) => (
+                  <label key={v} className={`flex cursor-pointer items-center gap-2 rounded-ctl border px-4 py-2 text-[14px] ${s.grading_mode === v ? 'border-brand bg-brand-light/50 font-semibold' : 'border-line'}`}>
+                    <input type="radio" name="grading_mode" className="accent-brand" checked={s.grading_mode === v} onChange={() => save({ grading_mode: v }, 'Grading speed')} />
+                    {l}
+                  </label>
+                ))}
+              </div>
+            </fieldset>
           </Section>
 
           <Section title="Privacy">

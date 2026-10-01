@@ -56,3 +56,18 @@ export function downloadCsv(filename: string, rows: (string | number | null)[][]
   a.click()
   URL.revokeObjectURL(a.href)
 }
+
+/** "about 25 minutes", "about 1 hour 10 minutes" (rounded up to the minute). */
+export function duration(seconds: number): string {
+  const m = Math.max(1, Math.ceil(seconds / 60))
+  if (m < 60) return `${m} minute${m === 1 ? '' : 's'}`
+  const h = Math.floor(m / 60)
+  const rest = m % 60
+  return `${h} hour${h === 1 ? '' : 's'}${rest ? ` ${rest} minute${rest === 1 ? '' : 's'}` : ''}`
+}
+
+export function clockTime(iso: string, now = new Date()): string {
+  const d = new Date(iso)
+  const t = d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
+  return d.toDateString() === now.toDateString() ? t : `${d.toLocaleDateString('en-US', { weekday: 'short' })} ${t}`
+}
