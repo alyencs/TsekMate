@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import logging
+from contextlib import asynccontextmanager
 from typing import Literal
 
 from fastapi import Body, FastAPI, File, Form, HTTPException, Query, Request, UploadFile
@@ -18,7 +19,20 @@ from .store.base import now_iso, new_id, verify_signature
 
 logging.basicConfig(level=logging.INFO)
 settings = get_settings()
-app = FastAPI(title="TsekMate API", version="0.1.0", description="AI-assisted, teacher-approved grading of handwritten work.")
+
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    store = get_store()
+    if store.kind == "memory":
+        from .seed import build
+
+        counts = build(store)
+        logging.getLogger("tsekmate").info("In-memory store seeded: %s", counts)
+    yield
+
+
+app = FastAPI(title="TsekMate API", version="0.1.0", description="AI-assisted, teacher-approved grading of handwritten work.", lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins,
@@ -44,16 +58,6 @@ async def _cf(_req: Request, e: core.Conflict):
 @app.exception_handler(llm.LLMUnavailable)
 async def _llm(_req: Request, e: llm.LLMUnavailable):
     return JSONResponse(status_code=503, content={"detail": str(e)})
-
-
-@app.on_event("startup")
-def _startup() -> None:
-    store = get_store()
-    if store.kind == "memory":
-        from .seed import build
-
-        counts = build(store)
-        logging.getLogger("tsekmate").info("In-memory store seeded: %s", counts)
 
 
 @app.get("/api/health")

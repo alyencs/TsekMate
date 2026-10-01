@@ -1,0 +1,162 @@
+{
+  "activity_id": "act-forces-motion-quiz2",
+  "writer": "font:Caveat",
+  "style": "synthetic",
+  "synthetic": true,
+  "problems": [
+    {
+      "problem_id": "act-forces-motion-quiz2-p1",
+      "transcript": [
+        "v = t / d",
+        "v = 12 / 240",
+        "= 0.05",
+        "v = 0.05 m/s"
+      ],
+      "units": [
+        {
+          "criterion": "Formula",
+          "verdict": "error",
+          "error_type": "conceptual",
+          "points": 0
+        },
+        {
+          "criterion": "Substitution",
+          "verdict": "correct",
+          "error_type": null,
+          "points": 1
+        },
+        {
+          "criterion": "Computation",
+          "verdict": "correct",
+          "error_type": null,
+          "points": 3.0
+        },
+        {
+          "criterion": "Answer with units",
+          "verdict": "error",
+          "error_type": null,
+          "points": 0
+        }
+      ],
+      "planted_errors": [
+        {
+          "criterion": "Formula",
+          "error_type": "conceptual"
+        }
+      ]
+    },
+    {
+      "problem_id": "act-forces-motion-quiz2-p2",
+      "transcript": [
+        "m = F / a",
+        "m = 12 / 3",
+        "= 4",
+        "m = 4"
+      ],
+      "units": [
+        {
+          "criterion": "Formula",
+          "verdict": "correct",
+          "error_type": null,
+          "points": 2.0
+        },
+        {
+          "criterion": "Substitution",
+          "verdict": "correct",
+          "error_type": null,
+          "points": 2.0
+        },
+        {
+          "criterion": "Computation",
+          "verdict": "correct",
+          "error_type": null,
+          "points": 3.0
+        },
+        {
+          "criterion": "Answer with units",
+          "verdict": "error",
+          "error_type": "units_and_notation",
+          "points": 1
+        }
+      ],
+      "planted_errors": [
+        {
+          "criterion": "Answer with units",
+          "error_type": "units_and_notation"
+        }
+      ]
+    },
+    {
+      "problem_id": "act-forces-motion-quiz2-p3",
+      "transcript": [
+        "v = d / t",
+        "v = 150 / 30",
+        "= 5",
+        "Answer: 5 m/s"
+      ],
+      "units": [
+        {
+          "criterion": "Formula",
+          "verdict": "correct",
+          "error_type": null,
+          "points": 2.0
+        },
+        {
+          "criterion": "Substitution",
+          "verdict": "correct",
+          "error_type": null,
+          "points": 2.0
+        },
+        {
+          "criterion": "Computation",
+          "verdict": "correct",
+          "error_type": null,
+          "points": 3.0
+        },
+        {
+          "criterion": "Answer with units",
+          "verdict": "correct",
+          "error_type": null,
+          "points": 3.0
+        }
+      ],
+      "planted_errors": []
+    },
+    {
+      "problem_id": "act-forces-motion-quiz2-p4",
+      "transcript": [
+        "F = m × a",
+        "F = 5 × 2",
+        "= 10",
+        "F = 10 N"
+      ],
+      "units": [
+        {
+          "criterion": "Formula",
+          "verdict": "correct",
+          "error_type": null,
+          "points": 2.0
+        },
+        {
+          "criterion": "Substitution",
+          "verdict": "correct",
+          "error_type": null,
+          "points": 2.0
+        },
+        {
+          "criterion": "Computation",
+          "verdict": "correct",
+          "error_type": null,
+          "points": 3.0
+        },
+        {
+          "criterion": "Answer with units",
+          "verdict": "correct",
+          "error_type": null,
+          "points": 3.0
+        }
+      ],
+      "planted_errors": []
+    }
+  ]
+}
