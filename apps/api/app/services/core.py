@@ -69,7 +69,12 @@ class Bundle:
         if not ai:
             return []
         edits = (self.reviews.get(sub_id) or {}).get("unit_edits") or {}
-        return [apply_edits(p, edits, self.rubric) if p.get("units") else p for p in ai["problem_results"]]
+        out = []
+        for p in ai["problem_results"]:
+            e = apply_edits(p, edits, self.rubric) if p.get("units") else dict(p)
+            e["ai_suggested_score"] = p["suggested_score"]
+            out.append(e)
+        return out
 
     def problem_finals(self, sub_id: str) -> dict[str, float]:
         overrides = (self.reviews.get(sub_id) or {}).get("problem_scores") or {}

@@ -15,7 +15,7 @@ const NAV: { key: NavKey; label: string; to: string; icon: typeof LayoutGrid }[]
   { key: 'gradebook', label: 'Gradebook', to: '/gradebook', icon: BookOpenText },
 ]
 
-export function Sidebar({ active, variant, queueBadge }: { active: NavKey; variant: 'dashboard' | 'default'; queueBadge?: number }) {
+export function Sidebar({ active, variant, queueBadge }: { active?: NavKey; variant: 'dashboard' | 'default'; queueBadge?: number }) {
   const navigate = useNavigate()
   const teacher = getTeacher()
   return (

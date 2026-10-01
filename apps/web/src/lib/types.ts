@@ -102,8 +102,10 @@ export interface ProblemResult {
   problem_id: string
   expected_answer: string
   student_answer?: string
-  units: Unit[]
+  units: (Unit & { edited?: boolean })[]
   suggested_score: number
+  ai_suggested_score: number
+  criteria_scores: { name: string; awarded: number; points: number }[]
   max_score: number
   overall_confidence: number
   flags: Flag[]

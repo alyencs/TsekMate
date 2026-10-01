@@ -72,7 +72,7 @@ export const api = {
   gradingProgress: (activityId: string) => request<GradingProgress>(`/api/activities/${activityId}/grading-progress`),
   queue: (activityId: string, tab: QueueTab) => request<Queue>(`/api/activities/${activityId}/queue?tab=${tab}`),
   submission: (id: string) => request<SubmissionDetail>(`/api/submissions/${id}`),
-  saveReview: (id: string, patch: Partial<Pick<Review, 'unit_edits' | 'problem_scores' | 'feedback'>>) =>
+  saveReview: (id: string, patch: { unit_edits?: Review['unit_edits']; problem_scores?: Record<string, number | null>; feedback?: Review['feedback'] }) =>
     request<SubmissionDetail>(`/api/submissions/${id}/review`, json('PATCH', patch)),
   approve: (id: string) =>
     request<{ submission: SubmissionDetail; final_score: number; max_score: number }>(`/api/submissions/${id}/approve`, {

@@ -12,7 +12,7 @@ export function AppShell({
   footer,
   contentClassName = 'px-8 py-8',
 }: {
-  active: NavKey
+  active?: NavKey
   variant?: 'dashboard' | 'default'
   queueBadge?: number
   topbar?: ReactNode
