@@ -865,3 +865,49 @@ def test_error_responses_hide_internals(client):
     assert r.status_code == 409 and "Traceback" not in r.text
     r = client.get("/api/activities/does-not-exist")
     assert r.status_code == 404 and "Traceback" not in r.text
+
+
+# ======================================================================== S-3 CORS
+def test_cors_allows_only_configured_origins(anon):
+    pre = {"Access-Control-Request-Method": "GET", "Access-Control-Request-Headers": "authorization"}
+    ok = anon.options("/api/activities", headers={"Origin": "http://localhost:5173", **pre})
+    assert ok.headers.get("access-control-allow-origin") == "http://localhost:5173"
+    for evil in ("https://evil.vercel.app", "https://tsekmate.vercel.app.evil.com", "null"):
+        r = anon.options("/api/activities", headers={"Origin": evil, **pre})
+        assert "access-control-allow-origin" not in r.headers, evil
+
+
+# ======================================================================== B-10 non-blocking upload
+def test_upload_work_does_not_block_other_requests(client, monkeypatch):
+    """Both requests go through the same client, so they share one event loop, as in the real server."""
+    from app.services import core
+
+    real = core.add_uploads
+
+    def slow(*a, **k):
+        time.sleep(1.5)  # stands in for slow storage writes / image checks
+        return real(*a, **k)
+
+    monkeypatch.setattr(core, "add_uploads", slow)
+    t = threading.Thread(target=lambda: upload(client))
+    t.start()
+    time.sleep(0.3)
+    started = time.time()
+    assert client.get("/api/health").status_code == 200
+    took = time.time() - started
+    t.join()
+    assert took < 0.8, f"health waited {took:.2f}s behind the upload"
+
+
+# ======================================================================== N-6 concurrent sign-outs
+def test_parallel_sign_outs_all_stick(anon):
+    from app import auth
+
+    auth._failures.clear()
+    tokens = [anon.post("/api/auth/signin", json=TEACHER).json()["token"] for _ in range(20)]
+    threads = [threading.Thread(target=lambda t=t: anon.post("/api/auth/signout", headers={"Authorization": f"Bearer {t}"})) for t in tokens]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+    assert all(auth.read_token(t) is None for t in tokens)
