@@ -60,14 +60,20 @@ async def _llm(_req: Request, e: llm.LLMUnavailable):
     return JSONResponse(status_code=503, content={"detail": str(e)})
 
 
+@app.exception_handler(llm.LLMError)
+async def _llm_error(_req: Request, e: llm.LLMError):
+    return JSONResponse(status_code=e.status, content={"detail": str(e)})
+
+
 @app.get("/api/health")
 def health():
     s = get_settings()
     return {
         "ok": True,
         "store": get_store().kind,
-        "ai": "configured" if s.anthropic_api_key else "missing ANTHROPIC_API_KEY",
-        "model": s.anthropic_model,
+        "ai_provider": "gemini",
+        "ai": "configured" if s.gemini_api_key else "missing GEMINI_API_KEY",
+        "model": s.gemini_model,
         "demo_mode": s.demo_mode,
         "delete_images_on_approve": s.delete_images_on_approve,
     }

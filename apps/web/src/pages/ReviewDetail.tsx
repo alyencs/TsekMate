@@ -238,6 +238,7 @@ export default function ReviewDetail() {
               <CircleAlert className="mt-0.5 h-5 w-5 shrink-0" aria-hidden />
               <div>
                 <p className="font-semibold">TsekMate could not grade this paper automatically.</p>
+                {detail.ai_result?.failure_reason && <p className="mt-1 text-[14px]">Reason: {detail.ai_result.failure_reason}</p>}
                 <p className="mt-1 text-[14px]">Please grade it by hand: enter the score for each {cfg.problemNoun.toLowerCase()} below and approve. You can also delete it on the upload page and upload a clearer photo.</p>
               </div>
             </div>

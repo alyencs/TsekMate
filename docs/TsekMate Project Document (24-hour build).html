@@ -157,7 +157,7 @@
 <tbody>
 <tr><td><strong>Frontend</strong></td><td><strong>React</strong> web app, mobile-friendly with camera upload</td><td>Camera capture on phones and fast to build. Installable PWA and offline queue are roadmap</td></tr>
 <tr><td><strong>Backend</strong></td><td><strong>Python (FastAPI)</strong></td><td>Strong ecosystem for AI calls and quick to stand up</td></tr>
-<tr><td><strong>AI</strong></td><td><strong>Anthropic Claude</strong> (vision) as the single provider for the 24-hour build</td><td>Vision + reasoning in one call with structured JSON output. Google Gemini comparison is stretch. A local <strong>Ollama / Hugging Face</strong> model for privacy-strict deployments is roadmap</td></tr>
+<tr><td><strong>AI</strong></td><td><strong>Google Gemini</strong> (vision, <code>gemini-2.5-flash</code>) as the single provider for the 24-hour build (changed from Anthropic Claude so development can use the Gemini API free tier)</td><td>Vision + reasoning in one call with structured JSON output. A local <strong>Ollama / Hugging Face</strong> model for privacy-strict deployments is roadmap</td></tr>
 <tr><td><strong>Database</strong></td><td><strong>Supabase (PostgreSQL)</strong> with file storage</td><td>Relational data and image storage in one service. Auth and row-level security are roadmap, so the prototype has one teacher account</td></tr>
 <tr><td><strong>Cloud</strong></td><td><strong>Vercel</strong> (frontend) and a cloud host for the API (Google Cloud or AWS)</td><td>All on the allowed list. If deployment takes too long, we demo from a local machine</td></tr>
 <tr><td><strong>Math verification</strong></td><td><strong>SymPy</strong> (algebraic equivalence checks)</td><td>Stretch. Deterministic check of step-to-step transitions</td></tr>

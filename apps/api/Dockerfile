@@ -1,7 +1,7 @@
 # TsekMate API for Google Cloud Run (or any container host).
 #   gcloud run deploy tsekmate-api --source apps/api --region asia-southeast1 --allow-unauthenticated \
-#     --set-env-vars ANTHROPIC_MODEL=claude-sonnet-5-5,CORS_ORIGINS=https://<your-app>.vercel.app,PUBLIC_API_URL=https://<run-url> \
-#     --set-secrets ANTHROPIC_API_KEY=anthropic-key:latest,SUPABASE_SERVICE_KEY=supabase-key:latest,SUPABASE_URL=supabase-url:latest
+#     --set-env-vars GEMINI_MODEL=gemini-2.5-flash,CORS_ORIGINS=https://<your-app>.vercel.app,PUBLIC_API_URL=https://<run-url> \
+#     --set-secrets GEMINI_API_KEY=gemini-key:latest,SUPABASE_SERVICE_KEY=supabase-key:latest,SUPABASE_URL=supabase-url:latest
 FROM python:3.11-slim
 WORKDIR /app
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1

@@ -44,7 +44,7 @@ def main() -> None:
     t = time.time()
     try:
         res = grade_file(a.image, a.activity)
-    except llm.LLMUnavailable as e:
+    except (llm.LLMUnavailable, llm.LLMError) as e:
         sys.exit(str(e))
     raw = res.pop("raw_json")
     print(json.dumps(res, indent=2, ensure_ascii=False))

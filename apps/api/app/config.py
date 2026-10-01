@@ -20,8 +20,9 @@ def _bool(name: str, default: bool = False) -> bool:
 
 class Settings:
     def __init__(self) -> None:
-        self.anthropic_api_key: str | None = os.getenv("ANTHROPIC_API_KEY") or None
-        self.anthropic_model: str = os.getenv("ANTHROPIC_MODEL", "claude-sonnet-5-5")
+        # Google Gemini (server side only; never exposed to the web app).
+        self.gemini_api_key: str | None = os.getenv("GEMINI_API_KEY") or None
+        self.gemini_model: str = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
         self.supabase_url: str | None = os.getenv("SUPABASE_URL") or None
         self.supabase_service_key: str | None = os.getenv("SUPABASE_SERVICE_KEY") or None
         self.supabase_bucket: str = os.getenv("SUPABASE_BUCKET", "submissions")

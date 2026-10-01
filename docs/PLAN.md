@@ -151,7 +151,7 @@ approved; S-014, S-022, S-031 exactly as in the review detail frames; class summ
 
 ## 6. Needed from the team
 
-- `ANTHROPIC_API_KEY` (checkpoint (a) and live grading are blocked without it).
+- `GEMINI_API_KEY` (checkpoint (a) and live grading are blocked without it).
 - A Supabase project (`SUPABASE_URL`, `SUPABASE_SERVICE_KEY`); until then the app runs on `MemoryStore`.
 - The handwritten sample photos and ground truth in `samples/`.
 
@@ -171,3 +171,11 @@ approved; S-014, S-022, S-031 exactly as in the review detail frames; class summ
 - **Flag button** on the review screen leaves the paper flagged and opens the next paper.
 - **Storage.** `MemoryStore` is used when Supabase is not configured; Supabase code is written against the same
   interface but was not run in this environment (no project credentials).
+
+## 8. AI provider change: Anthropic Claude to Google Gemini
+
+The team switched the AI provider to Google Gemini so development and testing can use the Gemini API free tier
+(Gemini is on the hackathon's allowed list). Only the provider seam changed: `apps/api/app/grading/llm.py` now calls
+`google-genai` (`gemini-2.5-flash` by default, JSON output mode, inline image bytes). Prompts, Pydantic validation, the
+retry-once rule, score recompute, routing, API endpoints, database, and UI are unchanged. Env var: `GEMINI_API_KEY`
+(replaces `ANTHROPIC_API_KEY`). The optional "Gemini comparison" stretch item no longer applies.

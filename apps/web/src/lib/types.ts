@@ -121,6 +121,7 @@ export interface AiResult {
   model: string
   prompt_version: string
   created_at: string
+  failure_reason?: string | null
 }
 
 export interface UnitEdit {

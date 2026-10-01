@@ -188,14 +188,14 @@ def main() -> None:
         raise SystemExit("No samples with ground truth found. See samples/README.md.")
     from app.config import get_settings
 
-    if not get_settings().anthropic_api_key:
-        raise SystemExit("ANTHROPIC_API_KEY is not set; the evaluation needs live AI calls.")
+    if not get_settings().gemini_api_key:
+        raise SystemExit("GEMINI_API_KEY is not set; the evaluation needs live AI calls.")
     r = evaluate(items, a.write_cache)
     out = ROOT / "samples" / "eval"
     out.mkdir(exist_ok=True)
     stem = "smoke_test" if a.include_synthetic else "report"
     (out / f"{stem}.json").write_text(json.dumps(r, indent=2))
-    (out / f"{stem}.md").write_text(markdown(r, a.include_synthetic, get_settings().anthropic_model))
+    (out / f"{stem}.md").write_text(markdown(r, a.include_synthetic, get_settings().gemini_model))
     print((out / f"{stem}.md").read_text())
 
 

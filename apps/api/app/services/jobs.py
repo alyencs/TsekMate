@@ -2,9 +2,11 @@
 from __future__ import annotations
 
 import logging
+import os
 import threading
 from concurrent.futures import ThreadPoolExecutor
 
+from ..config import get_settings
 from ..grading import grader, llm
 from ..store.base import Store, new_id, now_iso
 from .core import Bundle, touch
@@ -12,7 +14,8 @@ from .core import Bundle, touch
 log = logging.getLogger("tsekmate.jobs")
 _jobs: dict[str, dict] = {}
 _lock = threading.Lock()
-WORKERS = 3
+# Parallel grading calls. Kept low because Gemini free-tier limits are per minute.
+WORKERS = max(1, int(os.getenv("GRADING_WORKERS", "2")))
 
 
 def start(store: Store, activity_id: str) -> dict:
@@ -62,6 +65,9 @@ def grade_submission(store: Store, sub_id: str) -> dict:
         result = grader.grade_image(img[0], img[1], b.activity, b.problems, b.rubric)
     except llm.LLMUnavailable as e:
         result = grader.failed_result(b.activity, b.problems, b.rubric, "none", now_iso(), str(e))
+    except llm.LLMError as e:  # provider error with a teacher-safe message (quota, bad key, blocked, ...)
+        log.warning("grading failed for %s: %s", sub_id, e)
+        result = grader.failed_result(b.activity, b.problems, b.rubric, get_settings().gemini_model, now_iso(), str(e))
     except Exception as e:  # network errors, refusals, etc.: the teacher grades this paper by hand
         log.exception("grading failed for %s", sub_id)
         result = grader.failed_result(b.activity, b.problems, b.rubric, "unknown", now_iso(), f"{type(e).__name__}: {e}")

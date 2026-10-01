@@ -54,7 +54,7 @@ def test_review_edit_and_approve(client):
 def test_upload_assigns_free_id_and_grading_without_key_fails_safely(client, monkeypatch):
     from app.config import get_settings
 
-    monkeypatch.setattr(get_settings(), "anthropic_api_key", None)
+    monkeypatch.setattr(get_settings(), "gemini_api_key", None)
     monkeypatch.setattr(get_settings(), "demo_mode", False)
     assert client.delete("/api/submissions/sub-math-S-002").status_code == 204
     buf = io.BytesIO()

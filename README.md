@@ -33,7 +33,7 @@ Build plan and mockup decisions: [`docs/PLAN.md`](docs/PLAN.md).
 | Stretch | Parent message in English and Filipino, labeled machine draft, teacher approval | Built (needs API key) |
 | Stretch | Text-to-speech on the student feedback view (browser Web Speech API) | Built |
 | Stretch | SymPy cross-check of algebra steps | Not built |
-| Stretch | Gemini comparison | Not built |
+| Stretch | Second-model comparison | Not built |
 | Bonus | Mock school-system adapter (`/adapter/*`) | Built, **not an official integration** |
 
 Three subjects share one pipeline; only the rubric, labels, and error types change:
@@ -51,7 +51,7 @@ Three subjects share one pipeline; only the rubric, labels, and error types chan
 Requirements: Python 3.11, Node 20+.
 
 ```bash
-cp .env.example .env            # add ANTHROPIC_API_KEY for live grading; Supabase is optional for a local run
+cp .env.example .env            # add GEMINI_API_KEY for live grading; Supabase is optional for a local run
 
 # API
 cd apps/api
@@ -68,8 +68,35 @@ npm run dev                            # http://localhost:5173
 Sign in with the demo teacher account: **reyes@school.edu.ph / tsekmate** (set in `.env`).
 
 Without `SUPABASE_URL` the API runs on an **in-memory test store** that seeds itself on every start (restart = reset).
-Without `ANTHROPIC_API_KEY` everything works except live AI calls: new uploads are marked "Grading failed" so the
+Without `GEMINI_API_KEY` everything works except live AI calls: new uploads are marked "Grading failed" so the
 teacher can grade by hand, and the parent message and practice problems show a clear error.
+
+### Google Gemini setup
+
+TsekMate calls Google Gemini from the **backend only**; the browser never sees the key.
+
+1. Create a key in Google AI Studio: <https://aistudio.google.com/apikey> (free tier, no billing needed).
+2. Put it in the repo-root `.env` as `GEMINI_API_KEY=...` (`.env` is gitignored; never use a `VITE_` prefix for it).
+3. Restart the API and check `http://localhost:8000/api/health`: it shows `"ai_provider": "gemini"`, `"ai": "configured"`,
+   and the model name. Then try one paper: `python scripts/grade.py samples/synthetic/math-synthetic-01.jpg --activity act-linear-eq-quiz1`.
+
+How it is called: one `generate_content` request per paper with the photo as inline image bytes (PDFs as inline PDF)
+plus the versioned prompt from `apps/api/prompts/`, JSON output mode (`response_mime_type=application/json`), then the
+same Pydantic validation, one retry, and code-side score recompute as before (`apps/api/app/grading/llm.py`).
+
+**Free-tier notes** (check the current numbers on Google's rate-limit page; they change):
+- Requests per minute and per day are limited per project. Grading a full class of 38 papers is 38 requests, plus one
+  for the class summary. The API retries 429 and 5xx with backoff (`GEMINI_RETRY_ATTEMPTS`) and grades only
+  `GRADING_WORKERS` papers at a time. If a limit is still hit, that paper is marked "Grading failed" with the reason, and
+  pressing **Grade with TsekMate** again retries only the failed papers. Daily quotas reset at midnight Pacific time.
+- Free-tier prompts and responses may be used by Google to improve its products: use only synthetic or consented
+  samples (never real student work) on the free tier.
+- If `gemini-2.5-flash` is not available to your key, set `GEMINI_MODEL` to another vision-capable Gemini model listed
+  in AI Studio; the API reports "model was not found" clearly if the name is wrong.
+
+Errors are reported to the teacher without exposing the key: missing key, rejected key, permission denied, unknown
+model, quota or rate limit (HTTP 429), provider outage, blocked or cut-off output, and malformed JSON (retried once,
+then the paper is left for the teacher to grade by hand).
 
 ### Supabase
 
@@ -97,9 +124,11 @@ Seeded activity ids: `act-linear-eq-quiz1`, `act-forces-motion-quiz2`, `act-sva-
 
 | Variable | Default | Purpose |
 |---|---|---|
-| `ANTHROPIC_API_KEY` | (none) | Claude API key. Required for live grading |
-| `ANTHROPIC_MODEL` | `claude-sonnet-5-5` | Vision model used for grading and summaries |
-| `ANTHROPIC_EFFORT` | `medium` | Effort level (`low`, `medium`, `high`) |
+| `GEMINI_API_KEY` | (none) | Google Gemini API key (backend only). Required for live grading |
+| `GEMINI_MODEL` | `gemini-2.5-flash` | Vision model used for grading and summaries |
+| `GEMINI_THINKING_BUDGET` | (model default) | Optional cap on Gemini 2.5 thinking tokens (`0` turns thinking off on Flash) |
+| `GEMINI_RETRY_ATTEMPTS` | `3` | Attempts (with backoff) on 429 and 5xx responses |
+| `GRADING_WORKERS` | `2` | Papers graded in parallel; keep low on the free tier |
 | `SUPABASE_URL`, `SUPABASE_SERVICE_KEY` | (none) | Database and private storage. Empty = in-memory test store |
 | `SUPABASE_BUCKET` | `submissions` | Private bucket name |
 | `VITE_API_URL` | `http://localhost:8000` | Where the web app finds the API |
@@ -143,7 +172,7 @@ React (Vite, TypeScript, Tailwind, recharts)          apps/web   -> Vercel
    |  typed API client (src/lib/api.ts)
 FastAPI (Python 3.11, Pydantic v2)                    apps/api   -> Cloud Run (Dockerfile) or a laptop
    1. upload -> image quality check -> private bucket (signed URLs only)
-   2. background job: ONE Claude vision call per paper (transcribe + split + grade vs rubric), JSON only
+   2. background job: ONE Gemini vision call per paper (transcribe + split + grade vs rubric), JSON only
    3. Pydantic validation -> retry once -> else "needs teacher" (grading_failed)
    4. code recomputes every score and routes: needs_review vs ready
    5. teacher edits (every edit logged) -> approve -> gradebook
@@ -179,8 +208,9 @@ Supabase (PostgreSQL + Storage)                       apps/api/db/schema.sql
 - **Private storage, signed URLs**, and optional deletion of photos after approval (`DELETE_IMAGES_ON_APPROVE`).
 - **Non-labeling feedback**: comments describe the work. Parent messages contain no name, ID, or score and are labeled
   "Machine-drafted message. Please review before sending."
-- **Third-party AI**: images go to Anthropic for grading. A real deployment needs a data processing agreement,
-  zero-retention settings where available, and a school-level privacy review, or a locally hosted model.
+- **Third-party AI**: images go to Google (Gemini API) for grading. On the **free tier, Google may use prompts and
+  responses to improve its products**, so use only synthetic or consented sample papers there (as we do). A real
+  deployment needs the paid tier (not used for training), a data processing agreement, zero-retention settings where available, and a school-level privacy review, or a locally hosted model.
 - Under the Philippine Data Privacy Act (RA 10173) grades are sensitive personal information. This README is not legal
   advice.
 
@@ -247,7 +277,7 @@ vendor's API. Interactive docs: `http://localhost:8000/docs`.
 
 Offline capture queue and PWA; on-device name redaction; student and parent logins with row-level security; Bisaya
 messages; locally hosted model for privacy-strict schools; real LMS integration; geometry and diagrams; essay grading;
-SymPy cross-checks and Gemini comparison (stretch items not reached).
+SymPy cross-checks and a second-model comparison (stretch items not reached).
 
 ## Suggestions (not built, for the team to decide)
 

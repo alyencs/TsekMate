@@ -415,6 +415,7 @@ def submission_detail(store: Store, sub_id: str) -> dict:
             "model": ai["model"],
             "prompt_version": ai["prompt_version"],
             "created_at": ai["created_at"],
+            "failure_reason": (ai.get("raw_json") or {}).get("error") if "grading_failed" in (ai.get("flags") or []) else None,
         },
         "review": {
             "unit_edits": review.get("unit_edits") or {},

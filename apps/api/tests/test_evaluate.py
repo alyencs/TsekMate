@@ -9,7 +9,7 @@ def test_evaluate_metrics_with_stub(monkeypatch):
     import evaluate
 
     s = get_settings()
-    monkeypatch.setattr(s, "anthropic_api_key", "test-key")
+    monkeypatch.setattr(s, "gemini_api_key", "test-key")
     monkeypatch.setattr(s, "demo_mode", False)
     items = [i for i in evaluate.collect(include_synthetic=True) if i[1]["activity_id"] == "act-linear-eq-quiz1"][:2]
     assert items, "run scripts/make_synthetic.py first"

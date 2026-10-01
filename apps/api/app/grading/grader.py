@@ -126,10 +126,10 @@ def grade_image(data: bytes, media_type: str, activity: dict, problems: list[dic
             reply = llm.call(messages)
             raw = llm.extract_json(reply)
             _validate(raw, activity, problems, rubric)
-            result = _finish(raw, activity, problems, rubric, s.anthropic_model, started)
+            result = _finish(raw, activity, problems, rubric, s.gemini_model, started)
             if s.demo_mode:
                 s.demo_cache_dir.mkdir(parents=True, exist_ok=True)
-                _cache_path(h).write_text(json.dumps({"model": s.anthropic_model, "raw_json": raw}, indent=1))
+                _cache_path(h).write_text(json.dumps({"model": s.gemini_model, "raw_json": raw}, indent=1))
             return result
         except llm.LLMUnavailable:
             raise
@@ -143,7 +143,7 @@ def grade_image(data: bytes, media_type: str, activity: dict, problems: list[dic
                         "content": f"Your reply did not pass validation:\n{last_error}\nReturn the corrected JSON object only.",
                     },
                 ]
-    return failed_result(activity, problems, rubric, s.anthropic_model, started, last_error, reply)
+    return failed_result(activity, problems, rubric, s.gemini_model, started, last_error, reply)
 
 
 def _finish(raw: dict, activity: dict, problems: list[dict], rubric: list[dict], model: str, started: str, cached: bool = False) -> dict:
