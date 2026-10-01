@@ -71,8 +71,11 @@ export function AppShell({
             </>
           )}
         </header>
-        <main id="main" tabIndex={-1} key={pathname} className={`animate-page min-w-0 flex-1 focus:outline-none ${contentClassName} ${footer ? 'pb-32' : ''}`}>
+        <main id="main" tabIndex={-1} key={pathname} className={`animate-page min-w-0 flex-1 focus:outline-none ${contentClassName}`}>
           {children}
+          {/* Room for the fixed action bar, so the last fields can scroll clear of it.
+              A spacer, not padding: page padding classes like lg:py-8 would override a pb-* here. */}
+          {footer && <div aria-hidden className="h-24 shrink-0" />}
         </main>
         {footer && (
           <div className="safe-bottom fixed bottom-0 left-0 right-0 z-20 flex min-h-[72px] items-center justify-between gap-3 border-t border-line bg-white/95 px-4 pt-3 shadow-[0_-8px_24px_-16px_rgba(22,27,61,0.25)] sm:px-6 lg:left-sidebar lg:px-8">
