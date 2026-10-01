@@ -32,7 +32,8 @@ create table if not exists problems (
 create table if not exists rubrics (
   id text primary key,
   activity_id text not null references activities(id) on delete cascade,
-  criteria jsonb not null               -- [{name, description, points}]
+  criteria jsonb not null,              -- [{name, description, points}]
+  total_points numeric                  -- points per problem; must equal the sum of criteria points
 );
 
 create table if not exists rubric_templates (
@@ -77,7 +78,8 @@ create table if not exists teacher_reviews (
   submission_id text not null unique references submissions(id) on delete cascade,
   final_score numeric,
   unit_edits jsonb not null default '{}'::jsonb,
-  problem_scores jsonb not null default '{}'::jsonb,
+  problem_scores jsonb not null default '{}'::jsonb,   -- legacy (before migration 003); no longer written
+  criterion_scores jsonb not null default '{}'::jsonb, -- {"problem_id::criterion": points} teacher edits
   feedback jsonb not null default '{}'::jsonb,
   edit_log jsonb not null default '[]'::jsonb,
   approved boolean not null default false,

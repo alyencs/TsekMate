@@ -49,15 +49,17 @@ export default function Settings() {
           <Section title="AI grading">
             <div className="flex items-start justify-between gap-6">
               <div>
-                <p className="text-[15px] font-semibold">AI model</p>
-                <p className="mt-0.5 text-[13px] text-muted">Set on the server with ANTHROPIC_MODEL in .env (not changeable here, so the key and model stay server side).</p>
+                <p className="text-[15px] font-semibold">AI-assisted grading</p>
+                <p className="mt-0.5 text-[13px] text-muted">
+                  {s.ai.available || s.ai.demo_mode
+                    ? 'The AI drafts a score for each paper from your rubric. You review and approve every grade.'
+                    : 'Not available right now. Ask your TsekMate administrator to finish the setup. You can still grade papers by hand.'}
+                </p>
               </div>
               <div className="shrink-0 text-right">
-                <p className="font-mono text-[14px]">{s.ai.model}</p>
-                <p className={`mt-1 inline-flex items-center gap-1 text-[12px] font-semibold ${s.ai.configured ? 'text-ok-text' : 'text-bad-text'}`}>
-                  {s.ai.configured ? <CircleCheck className="h-3.5 w-3.5" aria-hidden /> : <CircleAlert className="h-3.5 w-3.5" aria-hidden />}
-                  {s.ai.provider} {s.ai.configured ? 'connected' : 'not configured (ANTHROPIC_API_KEY missing)'}
-                  {s.ai.demo_mode ? ' · demo mode on' : ''}
+                <p className={`inline-flex items-center gap-1 text-[13px] font-semibold ${s.ai.available || s.ai.demo_mode ? 'text-ok-text' : 'text-bad-text'}`}>
+                  {s.ai.available || s.ai.demo_mode ? <CircleCheck className="h-3.5 w-3.5" aria-hidden /> : <CircleAlert className="h-3.5 w-3.5" aria-hidden />}
+                  {s.ai.available || s.ai.demo_mode ? 'Ready' : 'Not available'}
                 </p>
               </div>
             </div>
@@ -134,10 +136,10 @@ export default function Settings() {
               checked={s.delete_images_on_approve}
               onChange={(v) => save({ delete_images_on_approve: v }, 'Photo deletion')}
               label="Delete the photo after approval"
-              description="After you approve a paper, its photo is deleted from storage. Scores, feedback, and the review record are kept."
+              description="After you approve a paper, its photo is deleted from storage. Scores and feedback are kept."
             />
             <p className="text-[13px] leading-relaxed text-muted">
-              Photos are stored in a private bucket and shown only through short-lived signed links. Each photo, including the name written on it, is sent to Anthropic&apos;s Claude API for grading.
+              Photos are stored in a private bucket and shown only through short-lived signed links. Each photo, including the name written on it, is sent to an outside AI service for grading.
               Use only synthetic papers or papers from people who agreed, until your school has a data processing agreement in place.
             </p>
           </Section>

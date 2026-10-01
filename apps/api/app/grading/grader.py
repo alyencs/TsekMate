@@ -13,7 +13,7 @@ from ..models import ERROR_TYPES, PaperOut
 from . import llm
 from .scoring import clean_problem, paper_confidence, paper_flags, route
 
-PROMPT_VERSION = "v1.1"  # v1.1 adds student identity (name, ID) to the same single call
+PROMPT_VERSION = "v1.2"  # v1.1: student identity; v1.2: every rubric criterion must be assessed
 PROMPT_FILE = API_DIR / "prompts" / f"grade_{PROMPT_VERSION}.txt"
 
 NOUNS = {
@@ -98,6 +98,38 @@ def _validate(raw: dict, activity: dict, problems: list[dict], rubric: list[dict
     return out
 
 
+def missing_criteria(out: PaperOut, rubric: list[dict]) -> dict[str, list[str]]:
+    """Rubric criteria with no unit, per problem."""
+    gaps: dict[str, list[str]] = {}
+    for p in out.problems:
+        have = {u.criterion.strip().lower() for u in p.units}
+        miss = [c["name"] for c in rubric if c["name"].strip().lower() not in have]
+        if miss:
+            gaps[p.problem_id] = miss
+    return gaps
+
+
+def fill_missing(raw: dict, rubric: list[dict]) -> dict:
+    """Add an 'unclear', 0-point unit for every criterion the model did not assess, so the teacher scores it.
+
+    Points are never invented: the placeholder earns 0 and routes the paper to Needs review."""
+    import copy
+
+    raw = copy.deepcopy(raw)
+    for p in raw.get("problems", []):
+        have = {str(u.get("criterion", "")).strip().lower() for u in p.get("units", [])}
+        nxt = max([int(u.get("index") or 0) for u in p.get("units", [])] + [0]) + 1
+        for c in rubric:
+            if c["name"].strip().lower() not in have:
+                p.setdefault("units", []).append({
+                    "index": nxt, "transcribed_text": "", "alt_reading": None, "verdict": "unclear", "error_type": None,
+                    "criterion": c["name"], "points_awarded": 0, "points_max": c["points"], "confidence": 0.0,
+                    "comment": "Not scored by the AI. Please check the paper and score this criterion.", "bbox": None,
+                })
+                nxt += 1
+    return raw
+
+
 def _cache_path(h: str) -> Path:
     return get_settings().demo_cache_dir / f"{h}.json"
 
@@ -114,7 +146,7 @@ def grade_image(data: bytes, media_type: str, activity: dict, problems: list[dic
 
     if s.demo_mode and _cache_path(h).exists():
         cached = json.loads(_cache_path(h).read_text())
-        return _finish(cached["raw_json"], activity, problems, rubric, cached.get("model", "demo-cache"), started, cached=True)
+        return _finish(fill_missing(cached["raw_json"], rubric), activity, problems, rubric, cached.get("model", "demo-cache"), started, cached=True)
 
     prompt = build_prompt(activity, problems, rubric)
     block = llm.pdf_block(data) if media_type == "application/pdf" else llm.image_block(data, media_type)
@@ -125,7 +157,12 @@ def grade_image(data: bytes, media_type: str, activity: dict, problems: list[dic
         try:
             reply = llm.call(messages)
             raw = llm.extract_json(reply)
-            _validate(raw, activity, problems, rubric)
+            out = _validate(raw, activity, problems, rubric)
+            gaps = missing_criteria(out, rubric)
+            if gaps and attempt == 0:
+                raise ValueError("Every rubric criterion must be assessed. Missing: " + "; ".join(f"{pid}: {', '.join(c)}" for pid, c in gaps.items()))
+            if gaps:
+                raw = fill_missing(raw, rubric)
             result = _finish(raw, activity, problems, rubric, s.anthropic_model, started)
             if s.demo_mode:
                 s.demo_cache_dir.mkdir(parents=True, exist_ok=True)
@@ -165,14 +202,19 @@ def _finish(raw: dict, activity: dict, problems: list[dict], rubric: list[dict],
     }
 
 
-def failed_result(activity: dict, problems: list[dict], rubric: list[dict], model: str, started: str, error: str, reply: str = "") -> dict:
+INCOMPLETE = "The AI's answer for this paper was incomplete. Press Grade again, or grade it by hand."
+
+
+def failed_result(activity: dict, problems: list[dict], rubric: list[dict], model: str, started: str, error: str, reply: str = "",
+                  teacher_message: str = INCOMPLETE) -> dict:
+    """A 'needs teacher' result. `error` is the technical reason (stored, backend only); `teacher_message` is shown."""
     total = sum(float(c["points"]) for c in rubric)
     cleaned = [
         {
             "problem_id": p["id"],
             "expected_answer": p["expected_answer"],
             "units": [],
-            "criteria_scores": [{"name": c["name"], "awarded": 0.0, "points": float(c["points"])} for c in rubric],
+            "criteria_scores": [{"name": c["name"], "description": c.get("description", ""), "awarded": 0.0, "points": float(c["points"]), "assessed": False} for c in rubric],
             "suggested_score": 0.0,
             "max_score": total,
             "overall_confidence": 0.0,
@@ -189,7 +231,7 @@ def failed_result(activity: dict, problems: list[dict], rubric: list[dict], mode
         "flags": ["grading_failed"],
         "model": model,
         "prompt_version": PROMPT_VERSION,
-        "raw_json": {"error": error, "reply": reply[:4000]},
+        "raw_json": {"error": error, "teacher_message": teacher_message, "reply": reply[:4000]},
         "identity": {"student_name": None, "student_id": None, "identity_confidence": 0.0},
         "created_at": started,
         "status": "failed",

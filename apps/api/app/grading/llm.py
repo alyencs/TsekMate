@@ -18,19 +18,28 @@ from ..config import get_settings
 log = logging.getLogger("tsekmate.llm")
 
 
+TEACHER_UNAVAILABLE = "AI grading isn't available on this server yet. Ask your TsekMate administrator to finish the AI setup."
+
+
 class LLMUnavailable(RuntimeError):
-    """No API key configured: live AI calls are off."""
+    """AI is not configured (no key / SDK). str() is the teacher-facing message; `detail` is for logs and admins."""
+
+    def __init__(self, detail: str) -> None:
+        super().__init__(TEACHER_UNAVAILABLE)
+        self.detail = detail
+        self.status = 503
 
 
 class LLMError(RuntimeError):
-    """A provider error with a message that is safe to show a teacher (never contains the key).
+    """A provider error. str() is a plain, teacher-facing message (no model, provider, key, or setup terms).
 
-    `status` is the HTTP status the TsekMate API returns for it.
+    `detail` keeps the technical reason for server logs and the stored grading record. `status` is the HTTP status.
     """
 
-    def __init__(self, message: str, status: int = 502) -> None:
+    def __init__(self, message: str, status: int = 502, detail: str | None = None) -> None:
         super().__init__(message)
         self.status = status
+        self.detail = detail or message
 
 
 SDK_MISSING = (
@@ -91,29 +100,33 @@ def _to_claude(messages: list[dict]) -> list[dict]:
     return out
 
 
+SETUP_PROBLEM = "AI grading isn't working because of a setup problem. Ask your TsekMate administrator to check the AI settings."
+
+
 def _map_api_error(e, model: str) -> LLMError:
     import anthropic
 
     msg = _safe(getattr(e, "message", "") or str(e))
+    name = type(e).__name__
     if isinstance(e, anthropic.AuthenticationError):
-        return LLMError("The Anthropic API key was rejected. Check ANTHROPIC_API_KEY in .env and restart the API.", 503)
+        return LLMError(SETUP_PROBLEM, 503, f"{name}: API key rejected (check ANTHROPIC_API_KEY)")
     if isinstance(e, anthropic.PermissionDeniedError):
-        return LLMError("This Anthropic API key is not allowed to use this model (permission denied). Check the key in the Claude Console.", 503)
+        return LLMError(SETUP_PROBLEM, 503, f"{name}: permission denied for model {model}")
     if isinstance(e, anthropic.NotFoundError):
-        return LLMError(f"Claude model '{model}' was not found. Check ANTHROPIC_MODEL in .env.", 503)
+        return LLMError(SETUP_PROBLEM, 503, f"{name}: model {model!r} not found (check ANTHROPIC_MODEL)")
     if isinstance(e, anthropic.RateLimitError):
-        return LLMError("Claude rate limit reached. Wait a minute and press Grade again.", 429)
+        return LLMError("The AI grading service is busy right now. Wait a minute, then press Grade again.", 429, f"{name}: {msg}")
     if isinstance(e, anthropic.APITimeoutError):
-        return LLMError("The request to Claude timed out. Press Grade again to retry.", 504)
+        return LLMError("The AI took too long to respond. Press Grade again to retry.", 504, f"{name}: request timed out")
     if isinstance(e, anthropic.APIConnectionError):
-        return LLMError("Could not reach the Claude API. Check the network and press Grade again.", 503)
+        return LLMError("TsekMate couldn't reach the AI grading service. Check the internet connection, then press Grade again.", 503, f"{name}: {msg}")
     if isinstance(e, anthropic.BadRequestError):
         if "credit balance" in msg.lower():
-            return LLMError("The Anthropic account has no remaining credit. Add credit in the Claude Console, then press Grade again.", 503)
-        return LLMError(f"Claude rejected the request: {msg}", 502)
+            return LLMError(SETUP_PROBLEM, 503, f"{name}: no remaining API credit")
+        return LLMError("The AI couldn't read this paper. Try a clearer photo, press Grade again, or grade it by hand.", 502, f"{name}: {msg}")
     if isinstance(e, anthropic.APIStatusError) and getattr(e, "status_code", 0) >= 500:
-        return LLMError("Claude is temporarily unavailable or overloaded. Press Grade again in a moment.", 503)
-    return LLMError(f"Claude request failed: {msg}", 502)
+        return LLMError("The AI grading service is temporarily unavailable. Press Grade again in a moment.", 503, f"{name}: {msg}")
+    return LLMError("Something went wrong while grading. Press Grade again, or grade this paper by hand.", 502, f"{name}: {msg}")
 
 
 def call(messages: list[dict], max_tokens: int = 16000, system: str | None = None) -> str:
@@ -133,15 +146,15 @@ def call(messages: list[dict], max_tokens: int = 16000, system: str | None = Non
         resp = client.messages.create(**kwargs)
     except anthropic.APIError as e:
         err = _map_api_error(e, s.anthropic_model)
-        log.warning("Claude API error (%s): %s", type(e).__name__, err)
+        log.warning("AI provider error: %s", err.detail)
         raise err from None
     if resp.stop_reason == "refusal":
-        raise LLMError("Claude declined to grade this paper. Please grade it by hand.", 422)
+        raise LLMError("The AI couldn't grade this paper. Please grade it by hand.", 422, "stop_reason=refusal")
     text = "".join(b.text for b in resp.content if getattr(b, "type", "") == "text")
     if resp.stop_reason == "max_tokens":
         raise ValueError("The model output was cut off (max_tokens). " + text[-200:])
     if not text.strip():
-        raise ValueError("Claude returned an empty response.")
+        raise ValueError("The model returned an empty response.")
     return text
 
 

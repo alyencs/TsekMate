@@ -38,11 +38,18 @@ def test_review_edit_and_approve(client):
     d = client.get(f"/api/submissions/{sid}").json()
     p2 = next(p for p in d["ai_result"]["problems"] if p["problem_id"].endswith("-p2"))
     assert p2["suggested_score"] == 5
-    r = client.patch(f"/api/submissions/{sid}/review", json={"problem_scores": {p2["problem_id"]: 6}, "feedback": {p2["problem_id"]: "Check line 2."}})
+    # The breakdown is the activity rubric: Setup 2 + Method 3 + Computation 3 + Final answer 2 = 10.
+    assert [(c["name"], c["points"]) for c in p2["criteria_scores"]] == [("Setup", 2), ("Method", 3), ("Computation", 3), ("Final answer", 2)]
+    assert p2["max_score"] == 10 and p2["final_score"] == sum(c["awarded"] for c in p2["criteria_scores"])
+    key = f"{p2['problem_id']}::Method"
+    r = client.patch(f"/api/submissions/{sid}/review", json={"criterion_scores": {key: 2}, "feedback": {p2["problem_id"]: "Check line 2."}})
     assert r.status_code == 200
-    assert any(e["field"].startswith("problem_scores") for e in r.json()["review"]["edit_log"])
-    bad = client.patch(f"/api/submissions/{sid}/review", json={"problem_scores": {p2["problem_id"]: 11}})
-    assert bad.status_code == 409
+    assert any(e["field"] == f"criterion.{key}" for e in r.json()["review"]["edit_log"])
+    p2 = next(p for p in r.json()["ai_result"]["problems"] if p["problem_id"] == p2["problem_id"])
+    assert p2["final_score"] == 6 and next(c for c in p2["criteria_scores"] if c["name"] == "Method")["edited"]
+    bad = client.patch(f"/api/submissions/{sid}/review", json={"criterion_scores": {key: 3.5}})  # over the criterion's 3
+    assert bad.status_code == 409 and "0 to 3" in bad.json()["detail"]
+    assert client.patch(f"/api/submissions/{sid}/review", json={"criterion_scores": {f"{p2['problem_id']}::Neatness": 1}}).status_code == 409
     a = client.post(f"/api/submissions/{sid}/approve").json()
     assert a["submission"]["status"] == "approved"
     g = client.get(f"/api/activities/{A}/gradebook").json()
@@ -69,7 +76,8 @@ def test_upload_starts_unidentified_grading_without_key_fails_safely_and_teacher
     res = jobs.grade_submission(get_store(), sid)
     assert res["status"] == "failed" and res["flags"] == ["grading_failed"]
     d = client.get(f"/api/submissions/{sid}").json()
-    assert d["student_id"] is None and "ANTHROPIC_API_KEY" in d["ai_result"]["failure_reason"]
+    reason = d["ai_result"]["failure_reason"]
+    assert d["student_id"] is None and "administrator" in reason and "ANTHROPIC" not in reason  # teacher-facing only
     assert client.post(f"/api/submissions/{sid}/approve").status_code == 409  # graded? no. and no student
     taken = client.patch(f"/api/submissions/{sid}/student", json={"student_id": "2026-001"})
     assert taken.status_code == 409  # 2026-001 already has a paper

@@ -6,6 +6,7 @@ import logging
 from ..config import API_DIR, get_settings
 from ..grading import llm
 from ..grading.flags import error_label
+from ..grading.scoring import rubric_problems
 from ..models import ERROR_TYPES
 
 log = logging.getLogger("tsekmate.ai_text")
@@ -59,7 +60,7 @@ def practice(b, focus: str, n: int = 2) -> dict:
     )
     data = llm.extract_json(llm.call([{"role": "user", "content": prompt}], max_tokens=2000))
     items = [str(x) for x in data.get("items", []) if str(x).strip()]
-    return {"items": items, "model": s.anthropic_model}
+    return {"items": items}
 
 
 def parent_message(b, sub_id: str) -> dict:
@@ -94,23 +95,11 @@ SUBJECT_HINTS = {
 }
 
 
-def normalize_points(criteria: list[dict], total: float) -> list[dict]:
-    """Scale points so they add up exactly to `total`, in 0.5-point steps (done in code, not trusted to the model)."""
-    raw = [max(float(c.get("points") or 0), 0.0) for c in criteria]
-    s = sum(raw) or float(len(raw))
-    raw = raw if sum(raw) else [1.0] * len(raw)
-    pts = [max(0.5, round(r / s * total * 2) / 2) for r in raw]
-    diff = round((total - sum(pts)) * 2) / 2
-    order = sorted(range(len(pts)), key=lambda i: -pts[i])
-    i = 0
-    while abs(diff) >= 0.5 and i < 100:
-        j = order[i % len(order)]
-        step = 0.5 if diff > 0 else -0.5
-        if pts[j] + step >= 0.5:
-            pts[j] += step
-            diff -= step
-        i += 1
-    return [{**c, "points": p} for c, p in zip(criteria, pts)]
+def _points(v) -> float:
+    try:
+        return max(round(float(v), 2), 0.0)
+    except (TypeError, ValueError):
+        return 0.0
 
 
 def generate_rubric(req) -> dict:
@@ -140,8 +129,11 @@ def generate_rubric(req) -> dict:
         if not name or name.lower() in seen:
             continue
         seen.add(name.lower())
-        criteria.append({"name": name, "description": " ".join(str(c.get("description", "")).split())[:200], "points": c.get("points", 0)})
+        criteria.append({"name": name, "description": " ".join(str(c.get("description", "")).split())[:200], "points": _points(c.get("points"))})
     if len(criteria) < 2:
         raise llm.LLMError("The AI did not return a usable rubric. Try again or create your own rubric.", 502)
-    criteria = normalize_points(criteria[:6], float(req.points_per_problem))
-    return {"criteria": criteria, "points_per_problem": float(req.points_per_problem), "model": s.anthropic_model, "prompt_version": "rubric_v1.0", "draft": True}
+    criteria = criteria[:6]
+    # Points are used exactly as drafted: never rescaled or rounded to fit. If they don't add up to the total,
+    # the teacher sees why and fixes the draft before it can be saved.
+    log.info("rubric draft generated (model=%s, prompt=rubric_v1.0)", s.anthropic_model)
+    return {"criteria": criteria, "points_per_problem": float(req.points_per_problem), "draft": True, "problems": rubric_problems(criteria, float(req.points_per_problem))}

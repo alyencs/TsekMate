@@ -111,7 +111,7 @@ export default function Gradebook() {
 
           {book.data && (
             <p className="mt-6 flex flex-wrap items-center gap-x-4 gap-y-1 text-[13px] text-muted">
-              <span className="font-semibold uppercase tracking-[0.12em] text-gray-500">Mock gradebook with sample data</span>
+              <span className="font-semibold uppercase tracking-[0.12em] text-gray-500">Practice gradebook · not connected to your school system</span>
               <span>
                 {book.data.activity.papers - book.data.activity.unidentified} of {book.data.activity.roster_size} students submitted
               </span>

@@ -18,7 +18,7 @@ export default function ClassSummary() {
   const [activityId, setActivityId, idError] = useActivityId()
   const acts = useAsync(() => api.activities(), [])
   const sum = useAsync(() => (activityId ? api.classSummary(activityId) : Promise.resolve(null)), [activityId])
-  const [practice, setPractice] = useState<{ items: string[]; model: string } | null>(null)
+  const [practice, setPractice] = useState<{ items: string[] } | null>(null)
   const [pErr, setPErr] = useState<string | null>(null)
   const [pLoading, setPLoading] = useState(false)
   const s = sum.data
@@ -32,7 +32,7 @@ export default function ClassSummary() {
       setPractice(await api.practice(activityId))
     } catch (e) {
       setPErr((e as Error).message)
-      setPractice({ items: [], model: '' })
+      setPractice({ items: [] })
     } finally {
       setPLoading(false)
     }

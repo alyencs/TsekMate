@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
-import { ArrowLeft, ArrowRight, Check, ChevronDown, ChevronRight, CircleAlert, FlagTriangleRight, ImageOff, MessageSquareText, RefreshCw, RotateCcw, Sparkles, UserRound, UserRoundX, ZoomIn, ZoomOut } from 'lucide-react'
+import { ArrowLeft, ArrowRight, Check, CircleAlert, FlagTriangleRight, ImageOff, MessageSquareText, RefreshCw, RotateCcw, Sparkles, UserRound, UserRoundX, ZoomIn, ZoomOut } from 'lucide-react'
 import { api } from '../lib/api'
-import type { Criterion, ProblemResult, SubmissionDetail, Unit, UnitEdit, Verdict } from '../lib/types'
+import type { Criterion, CriterionScore, ProblemResult, SubmissionDetail, Unit, UnitEdit, Verdict } from '../lib/types'
 import { AI_LABEL, SUBJECTS, errorTypeLabel } from '../lib/subjects'
 import { fmtScore, timeAgo } from '../lib/format'
 import { rememberActivity } from '../lib/session'
@@ -18,16 +18,35 @@ import { ErrorState, Loading } from '../components/ui/States'
 type U = Unit & { edited?: boolean }
 
 const ukey = (pid: string, u: { index: number }) => `${pid}:${u.index}`
+const ckey = (pid: string, name: string) => `${pid}::${name}`
+const r2 = (n: number) => Math.round(n * 100) / 100
 
-function recompute(units: U[], rubric: Criterion[]) {
+type Row = CriterionScore & { value: number; override: number | null | undefined; invalid: boolean }
+
+/**
+ * The score breakdown is the activity rubric, row for row: every criterion with its exact points.
+ * `computed` follows the AI's marks (with the teacher's unsaved step edits); the teacher's typed score replaces it.
+ * The problem score is always the sum of the rows.
+ */
+function breakdown(pid: string, units: U[], rubric: Criterion[], server: CriterionScore[], overrides: Record<string, number | null>): Row[] {
   return rubric.map((c) => {
-    const got = units.filter((u) => u.criterion.trim().toLowerCase() === c.name.trim().toLowerCase()).reduce((s, u) => s + (Number(u.points_awarded) || 0), 0)
-    return { name: c.name, awarded: Math.min(got, c.points), points: c.points }
+    const s = server.find((x) => x.name === c.name)
+    const got = units.filter((u) => u.criterion.trim().toLowerCase() === c.name.trim().toLowerCase()).reduce((t, u) => t + (Number(u.points_awarded) || 0), 0)
+    const computed = r2(Math.min(got, c.points))
+    const override = overrides[ckey(pid, c.name)]
+    const invalid = override !== undefined && override !== null && (Number.isNaN(override) || override < 0 || override > c.points)
+    const value = override !== undefined && override !== null && !invalid ? override : computed
+    return { name: c.name, description: c.description, points: c.points, computed, awarded: value, assessed: s?.assessed ?? false, edited: override !== undefined && override !== null, value, override, invalid }
   })
 }
 
 function needsCheck(p: ProblemResult) {
-  return p.flags.length > 0 || p.overall_confidence < 0.75 || p.units.some((u) => u.verdict === 'unclear' || u.confidence < 0.75)
+  return (
+    p.flags.length > 0 ||
+    p.overall_confidence < 0.75 ||
+    p.units.some((u) => u.verdict === 'unclear' || u.confidence < 0.75) ||
+    p.criteria_scores.some((c) => !c.assessed)
+  )
 }
 
 export default function ReviewDetail() {
@@ -37,7 +56,7 @@ export default function ReviewDetail() {
   const [detail, setDetail] = useState<SubmissionDetail | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [unitEdits, setUnitEdits] = useState<Record<string, UnitEdit>>({})
-  const [scores, setScores] = useState<Record<string, number | null>>({})
+  const [scores, setScores] = useState<Record<string, number | null>>({}) // `${problem_id}::${criterion}` -> points
   const [feedback, setFeedback] = useState<Record<string, string>>({})
   const [dirty, setDirty] = useState(false)
   const [saving, setSaving] = useState<'draft' | 'approve' | null>(null)
@@ -55,7 +74,7 @@ export default function ReviewDetail() {
         if (!alive) return
         setDetail(d)
         setUnitEdits(d.review.unit_edits)
-        setScores(d.review.problem_scores)
+        setScores(d.review.criterion_scores)
         setFeedback(d.review.feedback)
         setDirty(false)
         rememberActivity(d.activity.id)
@@ -82,11 +101,17 @@ export default function ReviewDetail() {
       return e ? { ...u, ...e, edited: true } : u
     })
   }, [result, unitEdits])
-  const criteria = useMemo(() => recompute(units, rubric), [units, rubric])
-  const computed = criteria.reduce((s, c) => s + c.awarded, 0)
-  const override = prob ? scores[prob.id] : undefined
-  const finalScore = override ?? computed
-  const problemEdited = !!prob && (override !== undefined && override !== null ? true : units.some((u) => u.edited))
+  const rows = useMemo(() => (result ? breakdown(result.problem_id, units, rubric, result.criteria_scores, scores) : []), [result, units, rubric, scores])
+  const finalScore = r2(rows.reduce((s, c) => s + c.value, 0))
+  const maxScore = r2(rows.reduce((s, c) => s + c.points, 0))
+  const problemEdited = rows.some((c) => c.edited) || units.some((u) => u.edited)
+  const invalidRows = rows.filter((c) => c.invalid)
+
+  function setCriterion(name: string, v: number | null) {
+    if (!result) return
+    setScores((s) => ({ ...s, [ckey(result.problem_id, name)]: v }))
+    setDirty(true)
+  }
 
   function setProblem(n: number) {
     const next = new URLSearchParams(params)
@@ -103,10 +128,16 @@ export default function ReviewDetail() {
 
   async function save(): Promise<SubmissionDetail | null> {
     if (!detail) return null
-    const d = await api.saveReview(detail.id, { unit_edits: unitEdits, problem_scores: scores, feedback })
+    const bad = Object.entries(scores).find(([k, v]) => {
+      if (v === null || v === undefined) return false
+      const c = rubric.find((x) => x.name === k.split('::').slice(1).join('::'))
+      return !c || Number.isNaN(v) || v < 0 || v > c.points
+    })
+    if (bad) throw new Error(`Check the score for ${bad[0].split('::').slice(1).join('::')}: it must be from 0 to the criterion's points.`)
+    const d = await api.saveReview(detail.id, { unit_edits: unitEdits, criterion_scores: scores, feedback })
     setDetail(d)
     setUnitEdits(d.review.unit_edits)
-    setScores(d.review.problem_scores)
+    setScores(d.review.criterion_scores)
     setFeedback(d.review.feedback)
     setDirty(false)
     return d
@@ -269,62 +300,35 @@ export default function ReviewDetail() {
               <div>
                 <p className="font-semibold">TsekMate could not grade this paper automatically.</p>
                 {detail.ai_result?.failure_reason && <p className="mt-1 text-[14px]">Reason: {detail.ai_result.failure_reason}</p>}
-                <p className="mt-1 text-[14px]">Try grading it again with the current rubric, or grade it by hand: enter the score for each {cfg.problemNoun.toLowerCase()} below and approve.</p>
+                <p className="mt-1 text-[14px]">Try grading it again, or grade it by hand: enter the points for each rubric criterion below and approve.</p>
                 <Button className="mt-4" icon={<RefreshCw className="h-4 w-4" aria-hidden />} onClick={gradeAgain} loading={regrading}>
                   Grade again
                 </Button>
               </div>
             </div>
           ) : (
-            units.map((u, i) => <UnitCard key={u.index} unit={u} position={i} units={units} subject={subject} rubric={rubric} onEdit={(patch) => editUnit(u, patch)} disabled={false} />)
+            units.map((u, i) => <UnitCard key={u.index} unit={u} position={i} units={units} subject={subject} onEdit={(patch) => editUnit(u, patch)} disabled={false} />)
           )}
 
-          {subject === 'grammar' && !failed && (
-            <section className="card px-6 py-6" aria-label="Rubric recap">
-              <p className="label-caps">Rubric recap</p>
-              <dl className="mt-4 grid grid-cols-2 gap-3">
-                {criteria.map((c) => (
-                  <div key={c.name} className="flex items-center justify-between rounded-[6px] bg-[#F9F7F5] px-2 py-2.5 text-[15px]">
-                    <dt>{c.name}</dt>
-                    <dd className="font-bold">
-                      {fmtScore(c.awarded)} / {fmtScore(c.points)}
-                    </dd>
-                  </div>
-                ))}
-              </dl>
-            </section>
-          )}
+          <RubricBreakdown rows={rows} total={finalScore} max={maxScore} label={label} onChange={setCriterion} />
 
           <section className="card mt-4 px-8 py-8 shadow-pop" aria-label="Score and approval">
             <div className="grid grid-cols-2 gap-6">
               <div>
                 <p className="label-caps tracking-[0.12em]">Suggested score</p>
                 <p className="mt-2 text-[38px] font-bold leading-none">
-                  {fmtScore(result?.ai_suggested_score ?? 0)} <span className="text-[20px] font-medium text-gray-400">/ {fmtScore(result?.max_score ?? 0)}</span>
+                  {fmtScore(result?.ai_suggested_score ?? 0)} <span className="text-[20px] font-medium text-gray-400">/ {fmtScore(maxScore)}</span>
                 </p>
               </div>
               <div>
-                <label htmlFor="final-score" className="label-caps block tracking-[0.12em] text-muted">
-                  Your final score
-                </label>
-                <div className="mt-2 flex items-center gap-3">
-                  <input
-                    id="final-score"
-                    type="number"
-                    min={0}
-                    max={result?.max_score ?? 10}
-                    step={0.5}
-                    value={finalScore}
-                    disabled={isApproved && false}
-                    onChange={(e) => {
-                      const v = e.target.value === '' ? null : Math.max(0, Math.min(Number(e.target.value), result?.max_score ?? 10))
-                      setScores((s) => ({ ...s, [prob.id]: v === computed ? null : v }))
-                      setDirty(true)
-                    }}
-                    className="h-12 w-16 rounded-[10px] border-2 border-brand bg-white text-center text-[22px] font-bold text-brand [appearance:textfield] focus:outline-none focus:ring-4 focus:ring-brand/20 [&::-webkit-inner-spin-button]:appearance-none"
-                  />
+                <p className="label-caps tracking-[0.12em] text-muted">Your final score</p>
+                <p className="mt-2 flex items-center gap-3 text-[38px] font-bold leading-none text-brand" aria-live="polite">
+                  <span>
+                    {fmtScore(finalScore)} <span className="text-[20px] font-medium text-gray-400">/ {fmtScore(maxScore)}</span>
+                  </span>
                   {problemEdited && <span className="rounded bg-brand-light px-2 py-1 text-[11px] font-semibold text-brand-dark">Edited by you</span>}
-                </div>
+                </p>
+                <p className="mt-2 text-[12px] text-muted">The sum of the rubric breakdown above.</p>
               </div>
             </div>
 
@@ -354,7 +358,14 @@ export default function ReviewDetail() {
               </p>
             )}
             <div className="flex items-center gap-4">
-              <Button size="lg" className="flex-1 shadow-md" onClick={approve} loading={saving === 'approve'} disabled={saving !== null || !detail.student_id} title={detail.student_id ? undefined : 'Choose the student first'}>
+              <Button
+                size="lg"
+                className="flex-1 shadow-md"
+                onClick={approve}
+                loading={saving === 'approve'}
+                disabled={saving !== null || !detail.student_id || invalidRows.length > 0}
+                title={!detail.student_id ? 'Choose the student first' : invalidRows.length ? 'Fix the scores marked in the rubric breakdown' : undefined}
+              >
                 {isApproved ? 'Save and re-approve' : 'Approve and save'}
               </Button>
               <Button size="lg" variant="secondary" className="w-36" onClick={saveDraft} loading={saving === 'draft'} disabled={saving !== null || !dirty}>
@@ -372,7 +383,12 @@ export default function ReviewDetail() {
             <p className="mt-3 text-[12px] text-muted">
               {detail.student_id ? `Approving saves all ${detail.activity.problems.length} ${cfg.problemsNoun} of this paper to the gradebook.` : 'Choose the student above before approving.'}
             </p>
-            <ReviewRecord detail={detail} />
+            <p className="mt-6 flex items-center gap-1.5 text-[12px] text-muted">
+              <Sparkles className="h-3.5 w-3.5 shrink-0 text-brand" aria-hidden />
+              {isApproved && detail.review.approved_at
+                ? `Approved by you ${timeAgo(detail.review.approved_at)}. You can still change scores and re-approve.`
+                : 'AI-assisted draft — Review the suggested score before approving.'}
+            </p>
           </section>
         </div>
       </div>
@@ -422,7 +438,7 @@ function unitLabel(subject: string, u: U, position: number, units: U[]) {
   return u.criterion
 }
 
-function UnitCard({ unit: u, position, units, subject, rubric, onEdit }: { unit: U; position: number; units: U[]; subject: 'math' | 'science' | 'grammar'; rubric: Criterion[]; onEdit: (p: UnitEdit) => void; disabled: boolean }) {
+function UnitCard({ unit: u, position, units, subject, onEdit }: { unit: U; position: number; units: U[]; subject: 'math' | 'science' | 'grammar'; onEdit: (p: UnitEdit) => void; disabled: boolean }) {
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState<UnitEdit>({})
   const err = u.verdict === 'error'
@@ -467,7 +483,7 @@ function UnitCard({ unit: u, position, units, subject, rubric, onEdit }: { unit:
             className="text-[13px] font-semibold text-brand-dark hover:underline"
             aria-expanded={editing}
             onClick={() => {
-              setDraft({ transcribed_text: u.transcribed_text, verdict: u.verdict, error_type: u.error_type, comment: u.comment, points_awarded: u.points_awarded })
+              setDraft({ transcribed_text: u.transcribed_text, verdict: u.verdict, error_type: u.error_type, comment: u.comment })
               setEditing((e) => !e)
             }}
           >
@@ -501,11 +517,7 @@ function UnitCard({ unit: u, position, units, subject, rubric, onEdit }: { unit:
               ))}
             </select>
           </label>
-          <label className="text-[12px] font-semibold text-muted">
-            Points (max {fmtScore(u.points_max)})
-            <input type="number" min={0} max={u.points_max} step={0.5} className="field mt-1" value={draft.points_awarded ?? 0} onChange={(e) => setDraft({ ...draft, points_awarded: Math.max(0, Math.min(u.points_max, Number(e.target.value))) })} />
-          </label>
-          <label className="text-[12px] font-semibold text-muted">
+          <label className="col-span-2 text-[12px] font-semibold text-muted">
             Comment (describe the work, not the student)
             <input className="field mt-1" value={draft.comment ?? ''} onChange={(e) => setDraft({ ...draft, comment: e.target.value })} />
           </label>
@@ -541,26 +553,9 @@ function UnitCard({ unit: u, position, units, subject, rubric, onEdit }: { unit:
               <p className="text-[11px] font-semibold uppercase tracking-wide text-muted">Criterion: {u.criterion}</p>
               {u.comment && <p className={`mt-1 text-[13px] ${err ? 'text-bad-strong' : unclear ? 'text-[#CA8A04]' : 'italic text-gray-600'}`}>{u.verdict === 'correct' ? `"${u.comment}"` : u.comment}</p>}
             </div>
-            {!isCorrection && (
-              <label className="flex shrink-0 items-center gap-2 text-[13px] text-muted">
-                <span className="sr-only">Points for {unitLabel(subject, u, position, units)}</span>
-                <input
-                  type="number"
-                  min={0}
-                  max={u.points_max}
-                  step={0.5}
-                  value={u.points_awarded}
-                  onChange={(e) => onEdit({ points_awarded: Math.max(0, Math.min(u.points_max, Number(e.target.value))) })}
-                  className="h-8 w-10 rounded-[6px] border border-line bg-white text-center text-[15px] font-semibold text-ink [appearance:textfield] focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20 [&::-webkit-inner-spin-button]:appearance-none"
-                />
-                / {fmtScore(u.points_max)} pt{u.points_max === 1 ? '' : 's'}
-                {unclear && ' (provisional)'}
-              </label>
-            )}
           </div>
         </div>
       )}
-      {rubric.length === 0 && null}
     </article>
   )
 }
@@ -588,7 +583,7 @@ function ImageViewer({ url, deleted, units, studentId }: { url: string | null; d
     return (
       <div className="flex aspect-[3/4] flex-col items-center justify-center gap-3 rounded-2xl border border-line bg-white text-center text-muted shadow-pop">
         <ImageOff className="h-8 w-8" aria-hidden />
-        <p className="max-w-[260px] text-[14px]">{deleted ? 'The photo was deleted after approval (privacy setting). Scores, feedback, and the review record are kept.' : 'No photo for this paper.'}</p>
+        <p className="max-w-[260px] text-[14px]">{deleted ? 'The photo was deleted after approval (privacy setting). Scores and feedback are kept.' : 'No photo for this paper.'}</p>
       </div>
     )
   const color = (v: string) => (v === 'error' ? '#DC2626' : v === 'unclear' ? '#F97316' : '#16A34A')
@@ -624,43 +619,81 @@ function ImageViewer({ url, deleted, units, studentId }: { url: string | null; d
   )
 }
 
-// ---------------------------------------------------------------- review record
-function ReviewRecord({ detail }: { detail: SubmissionDetail }) {
-  const [open, setOpen] = useState(false)
-  const log = detail.review.edit_log.filter((e) => e.field !== 'approved')
-  const last = log.length ? log[log.length - 1].at : null
-  const ai = detail.ai_result
+// ---------------------------------------------------------------- rubric breakdown
+function RubricBreakdown({ rows, total, max, label, onChange }: { rows: Row[]; total: number; max: number; label: string; onChange: (name: string, v: number | null) => void }) {
   return (
-    <div className="mt-8">
-      <button className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted" aria-expanded={open} onClick={() => setOpen((o) => !o)}>
-        {open ? <ChevronDown className="h-3.5 w-3.5" aria-hidden /> : <ChevronRight className="h-3.5 w-3.5" aria-hidden />}
-        Review record
-      </button>
-      <p className="mt-2 text-[11px] italic text-gray-400">
-        Model and prompt version: {ai ? `${ai.model}, ${ai.prompt_version}` : 'not graded'}. {log.length} edit{log.length === 1 ? '' : 's'} by you{last ? `, ${timeAgo(last)}` : ''}.
-        {detail.review.approved_at ? ` Approved ${timeAgo(detail.review.approved_at)}.` : ''}
-      </p>
-      {open && (
-        <div className="mt-3 rounded-ctl border border-line bg-[#F9F7F5] p-3 text-[12px] text-gray-600">
-          {ai && (
-            <p className="flex items-center gap-1.5">
-              <Sparkles className="h-3.5 w-3.5 text-brand" aria-hidden /> AI draft created {timeAgo(ai.created_at)} by {ai.model} (prompt {ai.prompt_version}), overall confidence {Math.round(ai.overall_confidence * 100)}%.
-            </p>
-          )}
-          {log.length === 0 ? (
-            <p className="mt-2">No edits yet.</p>
-          ) : (
-            <ul className="mt-2 max-h-40 space-y-1 overflow-auto">
-              {log.map((e, i) => (
-                <li key={i}>
-                  {new Date(e.at).toLocaleString()} · {e.field.replace(/^unit\./, 'unit ')}: {JSON.stringify(e.from)} → {JSON.stringify(e.to)}
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-      )}
-    </div>
+    <section className="card overflow-hidden" aria-labelledby="breakdown-title">
+      <div className="flex items-baseline justify-between px-6 pt-5">
+        <h3 id="breakdown-title" className="label-caps">
+          Rubric breakdown · {label}
+        </h3>
+        <p className="text-[12px] text-muted">Type a score to change it. Clear it to use the AI&apos;s points.</p>
+      </div>
+      <table className="mt-3 w-full text-left">
+        <thead>
+          <tr className="border-y border-line bg-[#F9F7F5] text-[11px] font-semibold uppercase tracking-[0.08em] text-muted">
+            <th scope="col" className="px-6 py-2.5">Criterion</th>
+            <th scope="col" className="w-[90px] px-2 py-2.5 text-right">AI points</th>
+            <th scope="col" className="w-[150px] px-6 py-2.5 text-right">Score</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((c) => {
+            const id = `crit-${c.name.replace(/\W+/g, '-')}`
+            return (
+              <tr key={c.name} className={`border-b border-line align-top ${c.assessed || c.edited ? '' : 'bg-warn-bg/40'}`}>
+                <td className="px-6 py-3">
+                  <label htmlFor={id} className="text-[15px] font-semibold">
+                    {c.name}
+                  </label>
+                  {c.description && <p className="text-[13px] text-gray-600">{c.description}</p>}
+                  <p className="mt-1 flex flex-wrap gap-1.5">
+                    {!c.assessed && !c.edited && (
+                      <span className="rounded border border-[#CA8A04] bg-white px-1.5 py-0.5 text-[11px] font-semibold text-warn-text">Not scored by the AI · please score it</span>
+                    )}
+                    {c.edited && <span className="rounded bg-brand-light px-1.5 py-0.5 text-[11px] font-semibold text-brand-dark">Edited</span>}
+                  </p>
+                  {c.invalid && (
+                    <p role="alert" className="mt-1 text-[12px] font-semibold text-bad-strong">
+                      Enter a score from 0 to {fmtScore(c.points)}.
+                    </p>
+                  )}
+                </td>
+                <td className="px-2 py-3 text-right text-[14px] text-muted">{c.assessed ? fmtScore(c.computed) : '—'}</td>
+                <td className="px-6 py-3 text-right">
+                  <span className="inline-flex items-center gap-1.5 text-[14px] text-muted">
+                    <input
+                      id={id}
+                      type="number"
+                      min={0}
+                      max={c.points}
+                      step="any"
+                      inputMode="decimal"
+                      value={c.override === undefined || c.override === null ? fmtScore(c.computed) : Number.isNaN(c.override) ? '' : c.override}
+                      onChange={(e) => onChange(c.name, e.target.value === '' ? null : Number(e.target.value))}
+                      aria-invalid={c.invalid}
+                      aria-describedby={`${id}-max`}
+                      className={`h-9 w-16 rounded-[6px] border bg-white text-center text-[15px] font-semibold text-ink [appearance:textfield] focus:outline-none focus:ring-2 [&::-webkit-inner-spin-button]:appearance-none ${
+                        c.invalid ? 'border-bad-strong focus:ring-bad-strong/20' : 'border-line focus:border-brand focus:ring-brand/20'
+                      }`}
+                    />
+                    <span id={`${id}-max`}>/ {fmtScore(c.points)}</span>
+                  </span>
+                </td>
+              </tr>
+            )
+          })}
+          <tr className="bg-[#F9F7F5]">
+            <td colSpan={2} className="px-6 py-3 text-right text-[12px] font-semibold uppercase tracking-wider text-muted">
+              Total
+            </td>
+            <td className="px-6 py-3 text-right text-[17px] font-bold text-brand">
+              {fmtScore(total)} / {fmtScore(max)}
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
   )
 }
 
@@ -674,7 +707,6 @@ function IdentityBar({ detail, onAssign }: { detail: SubmissionDetail; onAssign:
     setChoice(detail.identity?.suggested_student_id ?? '')
   }, [detail.id, detail.student_id, detail.identity?.suggested_student_id])
   const read = [id.extracted_name, id.extracted_id].filter(Boolean).join(', ')
-  const conf = id.identity_confidence ? ` · ${Math.round(id.identity_confidence * 100)}% identity confidence` : ''
   const how = id.method === 'id' ? 'Matched by student ID' : id.method === 'name' ? 'Matched by name' : id.method === 'teacher' ? 'Assigned by you' : id.method === 'teacher_upload' ? 'Chosen at upload' : null
   const approved = detail.status === 'approved'
 
@@ -684,7 +716,6 @@ function IdentityBar({ detail, onAssign }: { detail: SubmissionDetail; onAssign:
         <UserRound className="h-3.5 w-3.5" aria-hidden />
         {how ?? 'Student'}
         {read && <span>· paper says &quot;{read}&quot;</span>}
-        <span>{conf}</span>
         {!approved && (
           <button className="ml-1 font-semibold text-brand-dark hover:underline" onClick={() => setChanging(true)}>
             Change student

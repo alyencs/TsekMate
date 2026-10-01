@@ -30,7 +30,7 @@ Build plan, mockup decisions, and change log: [`docs/PLAN.md`](docs/PLAN.md).
 | Must have | Review detail: photo with step boxes, per-step edit, points, final score, feedback, review record | Built |
 | Must have | Approve (nothing is saved to the gradebook until then), mock gradebook, CSV export | Built |
 | Must have | Class summary: counts from code, one LLM call for misconception names and reteach focus | Built |
-| Must have | Activity creation with rubric templates (Math, Science, English Grammar) | Built |
+| Must have | Activity creation with a teacher-made rubric (empty by default; optional AI draft) | Built |
 | Must have | Evaluation script and command-line grader | Built (waiting for real samples and an API key) |
 | New | **Grade again** for papers whose AI grading failed (same paper, current rubric) | Built |
 | New | **Optional AI-generated rubric draft** (manual rubric stays the default) | Built |
@@ -88,11 +88,12 @@ TsekMate calls Claude from the **backend only**; the browser never sees the key.
 2. Put it in the repo-root `.env` as `ANTHROPIC_API_KEY=...` and keep `ANTHROPIC_MODEL=claude-haiku-4-5`
    (`.env` is gitignored; never use a `VITE_` prefix for it).
 3. Restart the API and open `http://localhost:8000/api/health`: it shows `"ai_provider": "anthropic"`, `"ai": "configured"`,
-   and the model. Settings in the app shows the same. Then try one paper:
+   and the model (this admin endpoint is the only place the model is shown; teachers only see *Ready* or *Not
+   available* in Settings). Then try one paper:
    `python scripts/grade.py samples/synthetic/math-synthetic-01.jpg --activity act-linear-eq-quiz1`.
 
 How it is called: one Messages API request per paper with the photo as a base64 image block (PDFs as a document
-block) plus the versioned prompt from `apps/api/prompts/` (`grade_v1.1.txt`), then Pydantic validation, one retry with
+block) plus the versioned prompt from `apps/api/prompts/` (`grade_v1.2.txt`), then Pydantic validation, one retry with
 the validation error, and code-side score recompute (`apps/api/app/grading/llm.py`, `grader.py`). The SDK retries
 429, 5xx, and connection errors with backoff; `GRADING_WORKERS` (default 2) limits parallel calls.
 
@@ -119,7 +120,11 @@ uvicorn app.main:app --port 8000
 2. **Existing database from an earlier version?** Run
    [`apps/api/db/migrations/002_roster_identity_notifications_settings.sql`](apps/api/db/migrations/) instead. It adds
    `students.name`, makes `submissions.student_id` nullable, adds `submissions.identity`, `ai_results.identity`, and the
-   `notifications` and `app_settings` tables. It is safe to run more than once.
+   `notifications` and `app_settings` tables. Then run `003_rubric_total_criterion_scores.sql`: it adds
+   `rubrics.total_points` (filled from each rubric's criteria, so existing rubrics are kept and nothing is re-scored)
+   and `teacher_reviews.criterion_scores`. Older per-problem overrides (`problem_scores`) keep their scores: they are
+   spread over the criteria on read and converted on the teacher's next edit. Both migrations are safe to run more
+   than once.
 3. Put `SUPABASE_URL` and `SUPABASE_SERVICE_KEY` (service role, server side only) in `.env`.
 4. Seed or reset with one command: `python scripts/seed.py --reset`
 
@@ -167,8 +172,24 @@ Never commit `.env`.
 - **AI-generated rubric (optional).** In Create Activity, **Create your own rubric** is the default. **Generate rubric
   with AI** drafts 3 to 5 criteria from the subject, title, problems, answer key, and an optional learning outcome. The
   draft is labeled *AI-generated draft — review and edit before using*, is fully editable, must add up to the chosen
-  points per problem (normalized in code), and only replaces the rubric when the teacher clicks **Use this rubric**.
+  points per problem, and only replaces the rubric when the teacher clicks **Use this rubric**. The drafted points
+  are shown exactly as drafted: if they don't add up, the teacher sees why and fixes them (never rescaled in code).
   Discarding returns to the manual rubric. Nothing is saved until **Save activity**.
+- **The rubric is the single source of truth for scoring.** A new activity starts with an empty rubric and an empty
+  total (no template is filled in). The teacher adds criteria and enters the total points per problem; the criteria
+  must add up to that total (e.g. 2 + 3 + 3 + 2 = 10), checked live in the form and again on the server, with a plain
+  message such as *"The criteria add up to 9 points, but the rubric total is 10."* Nothing is normalized, truncated, or
+  invented. The rubric can be edited on the Upload page until the first paper is graded, then it is locked so every
+  paper uses the same rubric; grading refuses a rubric that does not add up. Every AI result is scored against that
+  rubric in code: each step's maximum is the criterion's rubric points, a criterion never exceeds its points, and the
+  prompt (`grade_v1.2.txt`) requires every criterion in every problem. If the AI still skips one, it is retried once,
+  then the criterion is shown at 0 marked *Not scored by the AI · please score it* and the paper goes to Needs review.
+  The Review screen lists every criterion with its exact maximum; the teacher types a score per criterion (0 to its
+  points) and the problem score is always the sum. Approval, the gradebook, and the class summary use the same sums.
+- **No technical details for teachers.** Model names, prompt versions, provider and setup errors, and the edit log are
+  kept on the server (`ai_results.model`, `prompt_version`, `raw_json`, `teacher_reviews.edit_log`, server logs). The
+  teacher sees *AI-assisted draft — Review the suggested score before approving.* and plain error messages such as
+  *"The AI grading service is busy right now. Wait a minute, then press Grade again."*
 - **Class roster and student identity.** Each activity's class has a roster (`students` with `section` = class name).
   The single grading call also reads the student name and ID written on the paper (`student_name`, `student_id`,
   `identity_confidence`, separate from grading confidence). Code matches the paper to the roster: exact ID first, then
@@ -240,7 +261,8 @@ Supabase (PostgreSQL + Storage)                       apps/api/db/schema.sql, db
 
 - **One call per paper** with the problems, answer key, sample solutions, rubric (criteria, points, descriptions),
   settings, and the allowed error types in the prompt. Prompts are versioned text files in
-  [`apps/api/prompts/`](apps/api/prompts/): `grade_v1.1.txt` (v1.0 plus the identity fields; v1.0 is kept),
+  [`apps/api/prompts/`](apps/api/prompts/): `grade_v1.2.txt` (v1.1 plus "every rubric criterion must be assessed";
+  v1.1 added the identity fields; older versions are kept),
   `rubric_v1.0.txt`, `summary_v1.0.txt`, `parent_v1.0.txt`, `practice_v1.0.txt`.
 - **Prompt-injection safety**: everything on the paper is student work, never instructions.
 - **Identity never changes the grade**: the prompt says so, the schema parses identity leniently (bad or missing
@@ -299,7 +321,8 @@ tested with a stubbed model and font-rendered smoke-test images, which are exclu
 | `GET /api/dashboard` | Stat cards and deltas |
 | `GET/POST /api/activities`, `GET /api/activities/{id}` | Activities (with roster size, not submitted, unidentified counts) |
 | `GET /api/rubric-templates` | Rubric template dropdown |
-| `POST /api/rubric/generate` | **AI rubric draft** (not saved; normalized to the points per problem) |
+| `POST /api/rubric/generate` | **AI rubric draft** (not saved; points kept as drafted, with any mismatch explained) |
+| `PATCH /api/activities/{id}/rubric` | Replace the rubric and its total before grading (409 once a paper is graded) |
 | `GET/POST /api/activities/{id}/submissions` | List or upload papers (multipart `files`, optional `student_ids`) |
 | `DELETE /api/submissions/{id}` | Remove a not-yet-approved paper (retake) |
 | `POST /api/activities/{id}/grade`, `GET .../grading-progress` | Background batch grading (uploaded and failed papers) |
@@ -308,7 +331,7 @@ tested with a stubbed model and font-rendered smoke-test images, which are exclu
 | `GET /api/activities/{id}/roster` | **Roster with submission status** (incl. Not submitted) |
 | `GET /api/activities/{id}/queue?tab=` | `needs_review`, `ready`, `approved`, `all` |
 | `GET /api/submissions/{id}` | Detail with signed image URL, AI result, identity, roster, review state |
-| `PATCH /api/submissions/{id}/review` | Unit edits, problem scores, feedback (logged) |
+| `PATCH /api/submissions/{id}/review` | Step edits, per-criterion scores (`criterion_scores`, key `problem_id::criterion`), feedback (logged) |
 | `POST /api/submissions/{id}/approve` | Approve and write to the gradebook (needs an assigned student) |
 | `GET /api/activities/{id}/class-summary`, `POST .../practice` | Summary (incl. submissions); teacher practice problems |
 | `GET /api/activities/{id}/gradebook` | Mock gradebook with names and statuses |
@@ -342,7 +365,7 @@ docs: `http://localhost:8000/docs`.
 - One teacher account, no real authentication; the student view is a teacher-side preview. Profile edits change the
   display name and department only.
 - The in-memory store loses data on restart; use Supabase for anything that should persist. The Supabase code path
-  (including migration 002) has not been run against a real project yet.
+  (including migrations 002 and 003) has not been run against a real project yet.
 - The gradebook and adapter are mocks. Not legal advice on data privacy.
 
 ## History

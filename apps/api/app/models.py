@@ -25,9 +25,10 @@ UNIT_NOUN = {"math": "step", "science": "step", "grammar": "correction"}
 
 
 class Criterion(BaseModel):
-    name: str = Field(min_length=1)
+    # Lenient on purpose: scoring.rubric_problems() gives the teacher a readable reason instead of a 422.
+    name: str = ""
     description: str = ""
-    points: float = Field(gt=0)
+    points: float = 0
 
 
 class ActivitySettings(BaseModel):
@@ -51,7 +52,13 @@ class ActivityIn(BaseModel):
     date: str
     settings: ActivitySettings = ActivitySettings()
     problems: list[ProblemIn] = Field(min_length=1)
-    rubric: list[Criterion] = Field(min_length=1)
+    rubric: list[Criterion] = []
+    rubric_total: float | None = None  # points per problem; must equal the sum of the criteria
+
+
+class RubricUpdate(BaseModel):
+    criteria: list[Criterion] = []
+    total_points: float | None = None
 
 
 # ---------- AI output schema ----------
@@ -142,12 +149,12 @@ class PaperOut(BaseModel):
 
 class ReviewPatch(BaseModel):
     unit_edits: dict[str, dict] | None = None
-    problem_scores: dict[str, float | None] | None = None
+    criterion_scores: dict[str, float | None] | None = None  # "problem_id::criterion name" -> points (None = use AI)
     feedback: dict[str, str] | None = None
 
     @model_validator(mode="after")
     def _nonempty(self) -> "ReviewPatch":
-        if self.unit_edits is None and self.problem_scores is None and self.feedback is None:
+        if self.unit_edits is None and self.criterion_scores is None and self.feedback is None:
             raise ValueError("Nothing to update")
         return self
 

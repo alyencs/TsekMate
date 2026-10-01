@@ -11,7 +11,7 @@ import copy
 import random
 from datetime import datetime, timedelta, timezone
 
-from .grading.scoring import clean_problem, paper_confidence, paper_flags, route
+from .grading.scoring import clean_problem, paper_confidence, paper_flags, route, spread_score
 from .seed_data import ACTIVITIES, FRACTIONS, GRAMMAR, MATH, RUBRIC_TEMPLATES, SCIENCE
 from .services.paper import render_paper_cached as render_paper
 from .store.base import Store
@@ -378,7 +378,7 @@ def build(store: Store, now: datetime | None = None, with_images: bool = True) -
             },
         )
         store.insert("problems", problems)
-        store.insert("rubrics", {"id": f"{spec['id']}-rubric", "activity_id": spec["id"], "criteria": spec["rubric"]})
+        store.insert("rubrics", {"id": f"{spec['id']}-rubric", "activity_id": spec["id"], "criteria": spec["rubric"], "total_points": sum(float(c["points"]) for c in spec["rubric"])})
 
         assignment = _assign(plan, rnd, len(problems))
         cluster_members: dict[str, list[str]] = {}
@@ -493,13 +493,15 @@ def build(store: Store, now: datetime | None = None, with_images: bool = True) -
                     "created_at": graded_at.isoformat(),
                 }
             )
-            problem_scores = {}
-            edits = plan["edited"].get(student, {})
-            for pi, score in edits.items():
-                problem_scores[problems[pi]["id"]] = score
+            criterion_scores = {}
+            finals = {r["problem_id"]: r["suggested_score"] for r in results}
+            for pi, score in plan["edited"].get(student, {}).items():
+                pid = problems[pi]["id"]
+                criterion_scores.update(spread_score(pid, clean_problem(results[pi], spec["rubric"])["criteria_scores"], score))
+                finals[pid] = score
             feedback = {r["problem_id"]: r["student_hint"] for r in results}
             approved = status == "approved"
-            final = round(sum(problem_scores.get(r["problem_id"], r["suggested_score"]) for r in results), 2)
+            final = round(sum(finals.values()), 2)
             approved_at = None
             if approved:
                 base = when[plan["approved_when"]]
@@ -513,11 +515,11 @@ def build(store: Store, now: datetime | None = None, with_images: bool = True) -
                     "submission_id": sub_id,
                     "final_score": final if approved else None,
                     "unit_edits": {},
-                    "problem_scores": problem_scores,
+                    "criterion_scores": criterion_scores,
                     "feedback": feedback,
                     "edit_log": [
-                        {"at": approved_at or graded_at.isoformat(), "field": f"problem_scores.{pid}", "from": None, "to": sc}
-                        for pid, sc in problem_scores.items()
+                        {"at": approved_at or graded_at.isoformat(), "field": f"criterion.{k}", "from": None, "to": sc}
+                        for k, sc in criterion_scores.items()
                     ],
                     "approved": approved,
                     "approved_at": approved_at,

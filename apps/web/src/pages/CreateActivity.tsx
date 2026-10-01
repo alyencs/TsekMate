@@ -2,7 +2,8 @@ import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { ChevronDown, ChevronUp, CircleCheck, EllipsisVertical, Plus, Sparkles, Trash2 } from 'lucide-react'
 import { api } from '../lib/api'
-import type { ActivityInput, Criterion, FeedbackStyle, RubricTemplate, Subject } from '../lib/types'
+import type { ActivityInput, Criterion, FeedbackStyle, Subject } from '../lib/types'
+import { fmt, rubricProblems, rubricSum } from '../lib/rubric'
 import { SUBJECTS, SUBJECT_LIST } from '../lib/subjects'
 import { useAsync } from '../lib/useAsync'
 import { useAppSettings } from '../lib/appSettings'
@@ -10,7 +11,6 @@ import { AppShell, TopBar } from '../components/layout/AppShell'
 import { Button } from '../components/ui/Button'
 import { SubjectIcon } from '../components/ui/Chip'
 import { Toggle } from '../components/ui/Toggle'
-import { Loading } from '../components/ui/States'
 
 interface ProblemDraft {
   key: number
@@ -20,18 +20,12 @@ interface ProblemDraft {
   rule: string
 }
 
-const DEFAULT_TEMPLATE: Record<Subject, string> = {
-  math: 'tpl-math-linear',
-  science: 'tpl-science-calc',
-  grammar: 'tpl-grammar-correction',
-}
 let nextKey = 1
 const blank = (): ProblemDraft => ({ key: nextKey++, text: '', expected_answer: '', sample_solution: '', rule: '' })
 
 export default function CreateActivity() {
   const navigate = useNavigate()
   const [q, setQ] = useState('')
-  const templates = useAsync(() => api.rubricTemplates(), [])
   const classes = useAsync(() => api.profile(), [])
   const [title, setTitle] = useState('')
   const [klass, setKlass] = useState('BS Computer Science 2A')
@@ -39,8 +33,10 @@ export default function CreateActivity() {
   const [subject, setSubject] = useState<Subject>('math')
   const [problems, setProblems] = useState<ProblemDraft[]>(() => [blank()])
   const [open, setOpen] = useState<number>(problems[0].key)
-  const [templateId, setTemplateId] = useState(DEFAULT_TEMPLATE.math)
+  // The rubric starts empty: the teacher adds criteria, or accepts an AI draft. Nothing is prefilled.
   const [rubric, setRubric] = useState<Criterion[]>([])
+  const [rubricTotal, setRubricTotal] = useState<number | null>(null)
+  const [rubricTouched, setRubricTouched] = useState(false)
   const [acceptAlt, setAcceptAlt] = useState(true)
   const [requireUnits, setRequireUnits] = useState(true)
   const [style, setStyle] = useState<FeedbackStyle>('hint_only')
@@ -64,12 +60,6 @@ export default function CreateActivity() {
   const refs = [useRef<HTMLElement>(null), useRef<HTMLElement>(null), useRef<HTMLElement>(null)]
   const cfg = SUBJECTS[subject]
 
-  // load rubric from the template when templates arrive or the template changes
-  useEffect(() => {
-    const t = templates.data?.find((t) => t.id === templateId)
-    if (t) setRubric(t.criteria.map((c) => ({ ...c })))
-  }, [templates.data, templateId])
-
   // scroll-spy for the stepper
   useEffect(() => {
     const obs = new IntersectionObserver(
@@ -83,14 +73,13 @@ export default function CreateActivity() {
     refs.forEach((r) => r.current && obs.observe(r.current))
     return () => obs.disconnect()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [templates.data])
+  }, [])
 
-  function pickSubject(s: Subject) {
-    setSubject(s)
-    setTemplateId(DEFAULT_TEMPLATE[s])
-  }
+  // An earlier "can't save" list goes stale as soon as the rubric changes; the live message below takes over.
+  useEffect(() => setErrors([]), [rubric, rubricTotal])
 
-  const total = rubric.reduce((s, c) => s + (Number(c.points) || 0), 0)
+  const total = rubricSum(rubric)
+  const rubricErrs = rubricProblems(rubric, rubricTotal)
   const setP = (key: number, patch: Partial<ProblemDraft>) => setProblems((ps) => ps.map((p) => (p.key === key ? { ...p, ...patch } : p)))
   const setC = (i: number, patch: Partial<Criterion>) => setRubric((rs) => rs.map((c, j) => (j === i ? { ...c, ...patch } : c)))
 
@@ -103,10 +92,8 @@ export default function CreateActivity() {
       if (!p.text.trim() || !p.expected_answer.trim()) errs.push(`${cfg.problemNoun} ${i + 1} needs both the ${cfg.problemTextLabel.toLowerCase()} and the ${cfg.expectedLabel.toLowerCase()}.`)
     })
     if (draftOpen) errs.push('Use or discard the AI-generated rubric draft before saving.')
-    if (!rubric.length) errs.push('Add at least one rubric criterion.')
-    rubric.forEach((c, i) => {
-      if (!c.name.trim() || !(Number(c.points) > 0)) errs.push(`Rubric row ${i + 1} needs a name and points above 0.`)
-    })
+    errs.push(...rubricErrs)
+    setRubricTouched(true)
     setErrors(errs)
     if (errs.length) return
     const input: ActivityInput = {
@@ -116,7 +103,8 @@ export default function CreateActivity() {
       date,
       settings: { accept_alternate: acceptAlt, require_units: subject === 'science' && requireUnits, feedback_style: style },
       problems: filled.map((p, i) => ({ order: i + 1, text: p.text, expected_answer: p.expected_answer, sample_solution: p.sample_solution, rule: p.rule })),
-      rubric: rubric.map((c) => ({ ...c, points: Number(c.points) })),
+      rubric: rubric.map((c) => ({ ...c, name: c.name.trim(), points: Number(c.points) })),
+      rubric_total: rubricTotal,
     }
     setSaving(true)
     try {
@@ -191,7 +179,7 @@ export default function CreateActivity() {
                     key={s}
                     role="radio"
                     aria-checked={on}
-                    onClick={() => pickSubject(s)}
+                    onClick={() => setSubject(s)}
                     className={`relative flex h-[136px] flex-col items-center justify-center gap-3 rounded-card border bg-white transition-colors ${on ? 'border-2 border-brand' : 'border-line hover:border-brand-tint'}`}
                   >
                     {on && <CircleCheck className="absolute right-4 top-4 h-4 w-4 fill-brand text-white" aria-hidden />}
@@ -288,18 +276,6 @@ export default function CreateActivity() {
             <h2 id="rubric-title" className="text-[17px] font-semibold">
               Rubric
             </h2>
-            {rubricMode === 'manual' && (
-            <label className="flex items-center gap-3 text-[13px] text-muted">
-              Rubric template:
-              <select className="h-8 rounded-[6px] border border-line bg-white px-3 text-[15px] text-ink" value={templateId} onChange={(e) => setTemplateId(e.target.value)}>
-                {(templates.data ?? []).map((t: RubricTemplate) => (
-                  <option key={t.id} value={t.id}>
-                    {t.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-            )}
           </div>
           <div role="radiogroup" aria-label="How to make the rubric" className="mt-4 inline-flex rounded-[10px] border border-line bg-white p-1">
             {(
@@ -329,8 +305,9 @@ export default function CreateActivity() {
               title={title}
               problems={problems}
               onDraftChange={setDraftOpen}
-              onUse={(criteria) => {
+              onUse={(criteria, points) => {
                 setRubric(criteria)
+                setRubricTotal(points)
                 setRubricFromAi(true)
                 setDraftOpen(false)
                 setRubricMode('manual')
@@ -344,10 +321,26 @@ export default function CreateActivity() {
           {rubricMode === 'manual' && rubricFromAi && (
             <p className="mt-4 text-[13px] text-muted">This rubric started from an AI-generated draft that you accepted. You can still edit everything below.</p>
           )}
-          {rubricMode === 'ai' ? null : !templates.data ? (
-            <Loading />
-          ) : (
-            <div className="card mt-6 overflow-visible">
+          {rubricMode === 'ai' ? null : (
+            <>
+            <label className="mt-6 flex items-center gap-3 text-[15px] font-semibold">
+              Total points per {cfg.problemNoun.toLowerCase()}
+              <input
+                type="number"
+                min={0}
+                step="any"
+                aria-describedby="rubric-total-help"
+                className="field h-10 w-24 text-right font-semibold"
+                value={rubricTotal ?? ''}
+                placeholder="e.g. 10"
+                onChange={(e) => setRubricTotal(e.target.value === '' ? null : Number(e.target.value))}
+                onBlur={() => setRubricTouched(true)}
+              />
+              <span id="rubric-total-help" className="text-[13px] font-normal text-muted">
+                The criteria points must add up to this number.
+              </span>
+            </label>
+            <div className="card mt-4 overflow-visible">
               <table className="w-full text-left">
                 <thead>
                   <tr className="border-b border-line bg-[#F9F7F5] text-[11px] font-semibold uppercase tracking-[0.08em] text-muted">
@@ -358,6 +351,13 @@ export default function CreateActivity() {
                   </tr>
                 </thead>
                 <tbody>
+                  {rubric.length === 0 && (
+                    <tr className="border-b border-line">
+                      <td colSpan={4} className="px-6 py-8 text-center text-[15px] text-muted">
+                        No criteria yet. Choose <b className="text-ink">Add criterion</b>, or generate a draft with AI and edit it.
+                      </td>
+                    </tr>
+                  )}
                   {rubric.map((c, i) => (
                     <tr key={i} className="border-b border-line">
                       <td className="px-6 py-2">
@@ -367,7 +367,7 @@ export default function CreateActivity() {
                         <input aria-label={`Criterion ${i + 1} description`} className="w-full rounded px-1 py-2 text-[15px] text-gray-600 focus:bg-[#F9F7F5] focus:outline-none focus:ring-2 focus:ring-brand/20" value={c.description} onChange={(e) => setC(i, { description: e.target.value })} />
                       </td>
                       <td className="px-2 py-2 text-right">
-                        <input aria-label={`Criterion ${i + 1} points`} type="number" min={0.5} step={0.5} className="w-14 rounded px-1 py-2 text-right text-[15px] font-semibold [appearance:textfield] focus:bg-[#F9F7F5] focus:outline-none focus:ring-2 focus:ring-brand/20 [&::-webkit-inner-spin-button]:appearance-none" value={c.points} onChange={(e) => setC(i, { points: Number(e.target.value) })} />
+                        <input aria-label={`Criterion ${i + 1} points`} type="number" min={0} step="any" className="w-14 rounded px-1 py-2 text-right text-[15px] font-semibold [appearance:textfield] focus:bg-[#F9F7F5] focus:outline-none focus:ring-2 focus:ring-brand/20 [&::-webkit-inner-spin-button]:appearance-none" value={c.points} onChange={(e) => setC(i, { points: Number(e.target.value) })} />
                       </td>
                       <td className="relative py-2 text-center">
                         <button className="rounded p-1 text-gray-400 hover:bg-gray-100" aria-label={`Options for ${c.name || 'criterion'}`} aria-expanded={menu === i} onClick={() => setMenu(menu === i ? null : i)}>
@@ -384,24 +384,37 @@ export default function CreateActivity() {
                   ))}
                   <tr className="bg-[#F9F7F5]">
                     <td colSpan={2} className="rounded-bl-card px-6 py-5 text-right text-[13px] font-semibold uppercase tracking-wider text-gray-400">
-                      Total points
+                      Criteria total
                     </td>
-                    <td className="px-3 py-5 text-right text-[20px] font-bold text-brand">{total}</td>
+                    <td className={`px-3 py-5 text-right text-[20px] font-bold ${rubricTotal !== null && total !== rubricTotal ? 'text-bad-strong' : 'text-brand'}`}>
+                      {fmt(total)}
+                      {rubricTotal !== null && <span className="text-[14px] font-semibold text-muted"> / {fmt(rubricTotal)}</span>}
+                    </td>
                     <td className="rounded-br-card" />
                   </tr>
                 </tbody>
               </table>
             </div>
+            </>
           )}
           {rubricMode === 'manual' && (
             <div className="mt-5 flex items-center justify-between">
-              <button className="flex items-center gap-1.5 text-[15px] font-semibold text-brand-dark hover:underline" onClick={() => setRubric((rs) => [...rs, { name: '', description: '', points: 1 }])}>
+              <button className="flex items-center gap-1.5 text-[15px] font-semibold text-brand-dark hover:underline" onClick={() => setRubric((rs) => [...rs, { name: '', description: '', points: 0 }])}>
                 <Plus className="h-4 w-4" aria-hidden /> Add criterion
               </button>
-              <p className="text-[13px] text-muted">
-                {total} pts per {cfg.problemNoun.toLowerCase()} × {problems.length} = <b className="text-ink">{total * problems.length} pts</b> for the activity
-              </p>
+              {rubricTotal !== null && rubricTotal > 0 && (
+                <p className="text-[13px] text-muted">
+                  {fmt(rubricTotal)} pts per {cfg.problemNoun.toLowerCase()} × {problems.length} = <b className="text-ink">{fmt(rubricTotal * problems.length)} pts</b> for the activity
+                </p>
+              )}
             </div>
+          )}
+          {rubricMode === 'manual' && (rubricTouched || rubric.length > 0) && rubricErrs.length > 0 && (
+            <ul aria-live="polite" className="mt-3 list-disc rounded-ctl border border-warn-border bg-warn-bg py-2 pl-8 pr-3 text-[13px] text-warn-text">
+              {rubricErrs.map((e) => (
+                <li key={e}>{e}</li>
+              ))}
+            </ul>
           )}
         </section>
 
@@ -465,7 +478,7 @@ function AiRubricPanel({
   subject: Subject
   title: string
   problems: ProblemDraft[]
-  onUse: (c: Criterion[]) => void
+  onUse: (c: Criterion[], points: number) => void
   onCancel: () => void
   onDraftChange: (open: boolean) => void
 }) {
@@ -474,7 +487,8 @@ function AiRubricPanel({
   const [draft, setDraft] = useState<Criterion[] | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const sum = (draft ?? []).reduce((s, c) => s + (Number(c.points) || 0), 0)
+  const sum = rubricSum(draft ?? [])
+  const draftErrs = draft ? rubricProblems(draft, points) : []
   const set = (i: number, patch: Partial<Criterion>) => setDraft((d) => (d ? d.map((c, j) => (j === i ? { ...c, ...patch } : c)) : d))
 
   async function generate() {
@@ -488,7 +502,7 @@ function AiRubricPanel({
         learning_outcome: outcome,
         points_per_problem: points,
       })
-      setDraft(r.criteria)
+      setDraft(r.criteria) // points exactly as drafted; never rescaled to fit
       onDraftChange(true)
     } catch (e) {
       setError((e as Error).message)
@@ -549,7 +563,7 @@ function AiRubricPanel({
                     <input aria-label={`Draft criterion ${i + 1} description`} className="field h-9" value={c.description} onChange={(e) => set(i, { description: e.target.value })} />
                   </td>
                   <td className="py-1.5 text-right">
-                    <input aria-label={`Draft criterion ${i + 1} points`} type="number" min={0.5} step={0.5} className="field h-9 w-16 px-2 text-right" value={c.points} onChange={(e) => set(i, { points: Number(e.target.value) })} />
+                    <input aria-label={`Draft criterion ${i + 1} points`} type="number" min={0} step="any" className="field h-9 w-16 px-2 text-right" value={c.points} onChange={(e) => set(i, { points: Number(e.target.value) })} />
                   </td>
                   <td className="py-1.5 text-center">
                     <button className="rounded p-1 text-gray-400 hover:text-bad-strong" aria-label={`Remove draft criterion ${i + 1}`} onClick={() => setDraft((d) => (d ? d.filter((_, j) => j !== i) : d))}>
@@ -561,10 +575,10 @@ function AiRubricPanel({
             </tbody>
           </table>
           <div className="mt-4 flex items-center justify-between">
-            <p className={`text-[13px] ${sum === points ? 'text-muted' : 'font-semibold text-bad-text'}`}>
-              Total {sum} of {points} points{sum === points ? '' : ' — adjust the points so they add up before using this rubric'}
+            <p className={`text-[13px] ${draftErrs.length ? 'font-semibold text-bad-text' : 'text-muted'}`}>
+              Total {fmt(sum)} of {fmt(points)} points{draftErrs.length ? ` — ${draftErrs[0]}` : ''}
             </p>
-            <Button disabled={sum !== points || draft.length === 0 || draft.some((c) => !c.name.trim())} onClick={() => onUse(draft.map((c) => ({ ...c, name: c.name.trim(), points: Number(c.points) })))}>
+            <Button disabled={draftErrs.length > 0} onClick={() => onUse(draft.map((c) => ({ ...c, name: c.name.trim(), points: Number(c.points) })), points)}>
               Use this rubric
             </Button>
           </div>

@@ -78,7 +78,7 @@ def test_failed_paper_can_be_graded_again_and_is_matched_by_name(client, monkeyp
     wait_done(client, A)
     d = client.get(f"/api/submissions/{sid}").json()
     assert d["status"] == "ready" and d["student_id"] == "2026-002" and d["student_name"] == "Maria Santos"
-    assert d["identity"]["method"] == "name" and d["ai_result"]["prompt_version"] == "v1.1"
+    assert d["identity"]["method"] == "name" and d["ai_result"].get("prompt_version") is None
     # a graded paper cannot be "graded again" (only failed / not graded ones)
     assert client.post(f"/api/submissions/{sid}/regrade").status_code == 409
     n = client.get("/api/notifications").json()
@@ -118,7 +118,7 @@ def test_roster_tracks_not_submitted(client):
     assert any(row["student_id"] == "2026-040" and row["status"] == "Not submitted" for row in g["rows"])
 
 
-def test_ai_rubric_is_a_normalized_draft(client, monkeypatch):
+def test_ai_rubric_draft_is_never_rescaled(client, monkeypatch):
     monkeypatch.setattr(get_settings(), "anthropic_api_key", "sk-ant-test")
     reply = {"criteria": [{"name": "Setup", "description": "Sets up", "points": 3}, {"name": "Method", "description": "m", "points": 3},
                           {"name": "setup", "description": "dup", "points": 1}, {"name": "Answer", "description": "a", "points": 3}]}
@@ -126,7 +126,10 @@ def test_ai_rubric_is_a_normalized_draft(client, monkeypatch):
     body = {"subject": "math", "title": "Quiz", "problems": [{"text": "Solve 2x = 4", "expected_answer": "x = 2"}], "points_per_problem": 12}
     r = client.post("/api/rubric/generate", json=body).json()
     assert r["draft"] is True and [c["name"] for c in r["criteria"]] == ["Setup", "Method", "Answer"]
-    assert sum(c["points"] for c in r["criteria"]) == 12
+    # 3 + 3 + 3 = 9, not 12: the points are shown as drafted, with the reason, and the teacher fixes them.
+    assert [c["points"] for c in r["criteria"]] == [3, 3, 3]
+    assert any("add up to 9 points" in m for m in r["problems"])
+    assert "model" not in r and "prompt_version" not in r
     monkeypatch.setattr(llm, "call", lambda *a, **k: '{"criteria": [{"name": "Only one", "points": 10}]}')
     assert client.post("/api/rubric/generate", json=body).status_code == 502
     assert client.post("/api/rubric/generate", json={"subject": "math"}).status_code == 400
@@ -143,7 +146,7 @@ def test_notifications_read_state(client):
 
 def test_settings_threshold_reroutes_and_profile(client):
     s = client.get("/api/settings").json()
-    assert s["confidence_threshold"] == 0.75 and s["ai"]["provider"] == "Anthropic Claude"
+    assert s["confidence_threshold"] == 0.75 and set(s["ai"]) == {"available", "demo_mode"}  # no model/provider names
     before = client.get(f"/api/activities/{A}/queue?tab=ready").json()["counts"]
     r = client.patch("/api/settings", json={"confidence_threshold": 0.9}).json()
     after = client.get(f"/api/activities/{A}/queue?tab=ready").json()["counts"]

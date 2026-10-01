@@ -1,8 +1,12 @@
 """Deterministic scoring and routing. Never trust the model's arithmetic or its routing.
 
-Rules (brief Section 8):
-- points_awarded is clamped to [0, points_max], and points_max to the criterion's points.
-- A problem's score is the sum over rubric criteria of min(criterion points, sum of unit points for that criterion).
+The activity's rubric is the single source of truth for the score breakdown:
+- Every rubric criterion appears in the breakdown with exactly the teacher's points as its maximum.
+- A unit's points_max is the points of the criterion it counts toward (the model's own number is ignored), and
+  points_awarded is clamped to [0, that maximum].
+- A criterion's earned points = min(criterion points, sum of its units' points); criteria without any unit earn 0 and
+  are marked "assessed": False so the teacher sees them (the grader adds an "unclear" unit for them).
+- A problem's score is the sum of its criteria; the maximum is the rubric total.
 - A paper is flagged (needs_review) if any unit is unclear, any unit confidence < 0.75, any problem overall
   confidence < 0.75, or the model added any flag. Otherwise it is ready to approve.
 """
@@ -27,10 +31,8 @@ def clean_problem(problem: dict, rubric: list[dict]) -> dict:
     crit = criterion_points(rubric)
     for u in p["units"]:
         cap = crit.get(str(u.get("criterion", "")).strip().lower())
-        pmax = float(u.get("points_max") or 0)
-        if cap is not None:
-            pmax = min(pmax, cap) if pmax > 0 else cap
-        u["points_max"] = _r(max(0.0, pmax))
+        # The rubric decides the maximum, not the model.
+        u["points_max"] = _r(cap if cap is not None else 0.0)
         u["points_awarded"] = _r(min(max(0.0, float(u.get("points_awarded") or 0)), u["points_max"]))
         u["confidence"] = min(max(float(u.get("confidence") or 0), 0.0), 1.0)
     p["criteria_scores"] = criteria_breakdown(p["units"], rubric)
@@ -44,8 +46,10 @@ def criteria_breakdown(units: list[dict], rubric: list[dict]) -> list[dict]:
     out = []
     for c in rubric:
         name = c["name"].strip().lower()
-        got = sum(float(u.get("points_awarded") or 0) for u in units if str(u.get("criterion", "")).strip().lower() == name)
-        out.append({"name": c["name"], "awarded": _r(min(got, float(c["points"]))), "points": float(c["points"])})
+        mine = [u for u in units if str(u.get("criterion", "")).strip().lower() == name]
+        got = sum(float(u.get("points_awarded") or 0) for u in mine)
+        out.append({"name": c["name"], "description": c.get("description", ""), "awarded": _r(min(got, float(c["points"]))),
+                    "points": float(c["points"]), "assessed": bool(mine)})
     return out
 
 
@@ -127,3 +131,49 @@ def queue_chips(problems: list[dict], error_label) -> list[str]:
 def paper_total(problems: list[dict], problem_scores: dict[str, float] | None = None) -> float:
     ps = problem_scores or {}
     return _r(sum(float(ps[p["problem_id"]]) if ps.get(p["problem_id"]) is not None else p["suggested_score"] for p in problems))
+
+
+def rubric_problems(criteria: list[dict], total: float | None) -> list[str]:
+    """Teacher-facing reasons a rubric cannot be used for grading (empty list = valid). Never fixes points silently."""
+    errs: list[str] = []
+    if not criteria:
+        return ["The rubric has no criteria yet. Add at least one criterion."]
+    names = [str(c.get("name", "")).strip() for c in criteria]
+    if any(not n for n in names):
+        errs.append("Every rubric criterion needs a name.")
+    dup = sorted({n for n in names if n and names.count(n) > 1} | {n for n in names if n and [x.lower() for x in names].count(n.lower()) > 1})
+    if dup:
+        errs.append(f"Criterion names must be different: {', '.join(dup)}.")
+    pts = []
+    for c in criteria:
+        try:
+            v = float(c.get("points"))
+        except (TypeError, ValueError):
+            v = 0.0
+        if v <= 0:
+            errs.append(f"\"{c.get('name') or 'Unnamed criterion'}\" needs more than 0 points.")
+        pts.append(v)
+    s = round(sum(pts), 2)
+    if total is None or float(total) <= 0:
+        errs.append("Enter the rubric's total points.")
+    elif abs(s - float(total)) > 1e-6:
+        errs.append(f"The criteria add up to {s:g} points, but the rubric total is {float(total):g}. Make them match before grading.")
+    return errs
+
+
+def spread_score(problem_id: str, criteria_scores: list[dict], target: float) -> dict[str, float]:
+    """Criterion scores ("problem_id::criterion" -> points) that move a problem from its computed score to `target`.
+
+    Used for the sample data and to carry over per-problem overrides saved before scores were edited per criterion.
+    Each criterion stays within 0..its rubric points, so the total is still the sum of the criteria."""
+    diff = round(float(target) - sum(c["awarded"] for c in criteria_scores), 2)
+    out: dict[str, float] = {}
+    for c in criteria_scores if diff > 0 else list(reversed(criteria_scores)):
+        if abs(diff) < 1e-9:
+            break
+        room = c["points"] - c["awarded"] if diff > 0 else -c["awarded"]
+        step = min(diff, room) if diff > 0 else max(diff, room)
+        if step:
+            out[f"{problem_id}::{c['name']}"] = round(c["awarded"] + step, 2)
+            diff = round(diff - step, 2)
+    return out

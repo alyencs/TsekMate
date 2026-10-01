@@ -45,7 +45,7 @@ def main() -> None:
     try:
         res = grade_file(a.image, a.activity)
     except (llm.LLMUnavailable, llm.LLMError) as e:
-        sys.exit(str(e))
+        sys.exit(f"{e} ({e.detail})")  # command line: show the technical reason too
     raw = res.pop("raw_json")
     print(json.dumps(res, indent=2, ensure_ascii=False))
     if a.raw:

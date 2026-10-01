@@ -8,7 +8,7 @@ from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
 from ..grading.flags import error_label
-from ..grading.scoring import apply_edits, focus_problem, paper_confidence, queue_chips
+from ..grading.scoring import apply_edits, clean_problem, focus_problem, paper_confidence, queue_chips, rubric_problems, spread_score
 from ..models import ERROR_TYPES, ActivityIn
 from ..store.base import Store, new_id, now_iso
 
@@ -50,6 +50,8 @@ class Bundle:
         self.problems = sorted(store.select("problems", activity_id=activity_id), key=lambda p: p["position"])
         r = store.one("rubrics", activity_id=activity_id)
         self.rubric = r["criteria"] if r else []
+        # The rubric's declared total; older rows without one fall back to the criteria sum.
+        self.rubric_total = float(r["total_points"]) if r and r.get("total_points") is not None else round(sum(float(c["points"]) for c in self.rubric), 2)
         self.subs = store.select("submissions", activity_id=activity_id)
         ids = [s["id"] for s in self.subs]
         ai = store.select_in("ai_results", "submission_id", ids)
@@ -63,25 +65,40 @@ class Bundle:
         return self.activity["subject"]
 
     def effective(self, sub_id: str) -> list[dict]:
-        """AI problem results with the teacher's unit edits applied (scores recomputed in code)."""
+        """Problem results scored against THIS activity's rubric, with the teacher's edits applied.
+
+        - unit edits (transcription, verdict, error type, comment) are overlaid and the criteria recomputed;
+        - teacher criterion scores (`criterion_scores`, key "problem_id::criterion") replace the computed points;
+        - `criteria_scores` always lists every rubric criterion; `final_score` is their sum (the only total used
+          by review, approval, gradebook, and class summary).
+        """
         ai = self.ai.get(sub_id)
         if not ai:
             return []
-        edits = (self.reviews.get(sub_id) or {}).get("unit_edits") or {}
+        rev = self.reviews.get(sub_id) or {}
+        edits = rev.get("unit_edits") or {}
+        overrides = dict(rev.get("criterion_scores") or {})
+        legacy = rev.get("problem_scores") or {}  # per-problem overrides saved before migration 003
         out = []
         for p in ai["problem_results"]:
-            e = apply_edits(p, edits, self.rubric) if p.get("units") else dict(p)
-            e["ai_suggested_score"] = p["suggested_score"]
+            e = apply_edits(p, edits, self.rubric) if p.get("units") else clean_problem({**p, "units": []}, self.rubric)
+            pid = p["problem_id"]
+            if legacy.get(pid) is not None and not any(k.startswith(pid + "::") for k in overrides):
+                overrides.update(spread_score(pid, e["criteria_scores"], legacy[pid]))
+            e["ai_suggested_score"] = clean_problem(p, self.rubric)["suggested_score"] if p.get("units") else 0.0
+            for c in e["criteria_scores"]:
+                c["computed"] = c["awarded"]
+                v = overrides.get(f"{p['problem_id']}::{c['name']}")
+                c["edited"] = v is not None
+                if v is not None:
+                    c["awarded"] = round(min(max(float(v), 0.0), c["points"]), 2)
+            e["final_score"] = round(sum(c["awarded"] for c in e["criteria_scores"]), 2)
+            e["max_score"] = round(sum(c["points"] for c in e["criteria_scores"]), 2)
             out.append(e)
         return out
 
     def problem_finals(self, sub_id: str) -> dict[str, float]:
-        overrides = (self.reviews.get(sub_id) or {}).get("problem_scores") or {}
-        out = {}
-        for p in self.effective(sub_id):
-            v = overrides.get(p["problem_id"])
-            out[p["problem_id"]] = float(v) if v is not None else float(p["suggested_score"])
-        return out
+        return {p["problem_id"]: float(p["final_score"]) for p in self.effective(sub_id)}
 
     def final_total(self, sub_id: str) -> float:
         return round(sum(self.problem_finals(sub_id).values()), 2)
@@ -150,6 +167,9 @@ def activity_full(b: Bundle) -> dict:
             for p in b.problems
         ],
         "rubric": b.rubric,
+        "rubric_total": b.rubric_total,
+        "rubric_errors": rubric_problems(b.rubric, b.rubric_total),
+        "rubric_locked": any(x["status"] in GRADED + ("grading",) for x in b.subs),
     }
 
 
@@ -159,8 +179,11 @@ def list_activities(store: Store) -> list[dict]:
 
 
 def create_activity(store: Store, data: ActivityIn) -> dict:
+    errs = rubric_problems([c.model_dump() for c in data.rubric], data.rubric_total)
+    if errs:
+        raise Conflict(" ".join(errs))
     aid = f"act-{new_id()[:8]}"
-    total = sum(c.points for c in data.rubric) * len(data.problems)
+    total = float(data.rubric_total) * len(data.problems)
     ts = now_iso()
     store.insert(
         "activities",
@@ -191,8 +214,27 @@ def create_activity(store: Store, data: ActivityIn) -> dict:
             for i, p in enumerate(sorted(data.problems, key=lambda p: p.order))
         ],
     )
-    store.insert("rubrics", {"id": f"{aid}-rubric", "activity_id": aid, "criteria": [c.model_dump() for c in data.rubric]})
+    store.insert("rubrics", {"id": f"{aid}-rubric", "activity_id": aid, "criteria": _clean_criteria([c.model_dump() for c in data.rubric]), "total_points": float(data.rubric_total)})
     return activity_full(Bundle(store, aid))
+
+
+def _clean_criteria(criteria: list[dict]) -> list[dict]:
+    return [{"name": str(c["name"]).strip(), "description": str(c.get("description") or "").strip(), "points": float(c["points"])} for c in criteria]
+
+
+def update_rubric(store: Store, activity_id: str, criteria: list[dict], total: float) -> dict:
+    """Replace an activity's rubric before any paper is graded (so every result uses one rubric)."""
+    b = Bundle(store, activity_id)
+    if any(x["status"] in GRADED + ("grading",) for x in b.subs):
+        raise Conflict("This activity already has graded papers, so its rubric can't change. Create a new activity for a different rubric.")
+    errs = rubric_problems(criteria, total)
+    if errs:
+        raise Conflict(" ".join(errs))
+    row = store.one("rubrics", activity_id=activity_id)
+    rid = row["id"] if row else f"{activity_id}-rubric"
+    store.insert("rubrics", {"id": rid, "activity_id": activity_id, "criteria": _clean_criteria(criteria), "total_points": float(total)})
+    store.update("activities", activity_id, {"total_points": float(total) * len(b.problems), "updated_at": now_iso()})
+    return activity_full(Bundle(store, activity_id))
 
 
 def touch(store: Store, activity_id: str) -> None:
@@ -390,7 +432,7 @@ def _review_row(store: Store, sub_id: str) -> dict:
         "submission_id": sub_id,
         "final_score": None,
         "unit_edits": {},
-        "problem_scores": {},
+        "criterion_scores": {},
         "feedback": {},
         "edit_log": [],
         "approved": False,
@@ -410,7 +452,7 @@ def submission_detail(store: Store, sub_id: str) -> dict:
     ai = b.ai.get(sub_id)
     review = b.reviews.get(sub_id) or {
         "unit_edits": {},
-        "problem_scores": {},
+        "criterion_scores": {},
         "feedback": {},
         "edit_log": [],
         "final_score": None,
@@ -441,14 +483,14 @@ def submission_detail(store: Store, sub_id: str) -> dict:
             "max_score": float(ai["max_score"]),
             "overall_confidence": float(ai["overall_confidence"]),
             "flags": ai.get("flags") or [],
-            "model": ai["model"],
-            "prompt_version": ai["prompt_version"],
             "created_at": ai["created_at"],
-            "failure_reason": (ai.get("raw_json") or {}).get("error") if "grading_failed" in (ai.get("flags") or []) else None,
+            # Teacher-facing reason only; the technical reason, model, and prompt version stay in the database.
+            "failure_reason": ((ai.get("raw_json") or {}).get("teacher_message") or "AI grading didn't finish for this paper.")
+            if "grading_failed" in (ai.get("flags") or []) else None,
         },
         "review": {
             "unit_edits": review.get("unit_edits") or {},
-            "problem_scores": review.get("problem_scores") or {},
+            "criterion_scores": review.get("criterion_scores") or {},
             "feedback": feedback,
             "edit_log": review.get("edit_log") or [],
             "final_score": review.get("final_score"),
@@ -461,7 +503,7 @@ def submission_detail(store: Store, sub_id: str) -> dict:
     }
 
 
-def patch_review(store: Store, sub_id: str, unit_edits: dict | None, problem_scores: dict | None, feedback: dict | None) -> dict:
+def patch_review(store: Store, sub_id: str, unit_edits: dict | None, criterion_scores: dict | None, feedback: dict | None) -> dict:
     s = store.get("submissions", sub_id)
     if not s:
         raise NotFound("Paper not found.")
@@ -472,10 +514,16 @@ def patch_review(store: Store, sub_id: str, unit_edits: dict | None, problem_sco
     ts = now_iso()
     log = list(r.get("edit_log") or [])
     ue = dict(r.get("unit_edits") or {})
-    ps = dict(r.get("problem_scores") or {})
+    cs = dict(r.get("criterion_scores") or {})
+    if r.get("problem_scores"):  # carry legacy per-problem overrides over as criterion scores on the first edit
+        b.reviews[sub_id] = r
+        for e in b.effective(sub_id):
+            for c in e["criteria_scores"]:
+                if c["edited"]:
+                    cs.setdefault(f"{e['problem_id']}::{c['name']}", c["awarded"])
     fb = dict(r.get("feedback") or {})
     valid_problems = {p["id"] for p in b.problems}
-    max_by_problem = {p["problem_id"]: float(p["max_score"]) for p in b.ai[sub_id]["problem_results"]}
+    crit_max = {c["name"]: float(c["points"]) for c in b.rubric}
     allowed_types = set(ERROR_TYPES[b.subject])
     for key, edit in (unit_edits or {}).items():
         pid = key.rsplit(":", 1)[0]
@@ -496,26 +544,31 @@ def patch_review(store: Store, sub_id: str, unit_edits: dict | None, problem_sco
                 log.append({"at": ts, "field": f"unit.{key}.{k}", "from": prev, "to": v})
             clean[k] = v
         ue[key] = {**(ue.get(key) or {}), **clean}
-    for pid, v in (problem_scores or {}).items():
+    for key, v in (criterion_scores or {}).items():
+        pid, _, name = key.partition("::")
         if pid not in valid_problems:
             raise Conflict(f"Unknown problem '{pid}'.")
+        if name not in crit_max:
+            raise Conflict(f"'{name}' is not a criterion in this activity's rubric.")
         if v is not None:
             v = float(v)
-            if v < 0 or v > max_by_problem.get(pid, 0):
-                raise Conflict(f"Score must be between 0 and {max_by_problem.get(pid, 0):g}.")
-        if ps.get(pid) != v:
-            log.append({"at": ts, "field": f"problem_scores.{pid}", "from": ps.get(pid), "to": v})
+            if v < 0 or v > crit_max[name]:
+                raise Conflict(f"{name}: enter a score from 0 to {crit_max[name]:g}.")
+        if cs.get(key) != v:
+            log.append({"at": ts, "field": f"criterion.{key}", "from": cs.get(key), "to": v})
         if v is None:
-            ps.pop(pid, None)
+            cs.pop(key, None)
         else:
-            ps[pid] = v
+            cs[key] = v
     for pid, text in (feedback or {}).items():
         if pid not in valid_problems:
             raise Conflict(f"Unknown problem '{pid}'.")
         if fb.get(pid) != text:
             log.append({"at": ts, "field": f"feedback.{pid}", "from": fb.get(pid), "to": text})
         fb[pid] = text
-    patch = {"unit_edits": ue, "problem_scores": ps, "feedback": fb, "edit_log": log, "updated_at": ts}
+    patch = {"unit_edits": ue, "criterion_scores": cs, "feedback": fb, "edit_log": log, "updated_at": ts}
+    if r.get("problem_scores"):
+        patch["problem_scores"] = {}
     store.update("teacher_reviews", r["id"], patch)
     if s["status"] == "approved":
         b2 = Bundle(store, s["activity_id"])
@@ -641,13 +694,12 @@ def class_summary(store: Store, activity_id: str) -> dict:
     keys = {f"{sid}:{pid}:{u['index']}": (st, pid, u) for sid, st, pid, u in errs}
     signature = hashlib.sha1(json.dumps(sorted(keys)).encode()).hexdigest()
     cached = store.get("class_summaries", activity_id)
-    ai_model = cached["model"] if cached else None
     if errs and (not cached or (cached["signature"] not in ("seed", signature))):
         fresh = ai_text.misconceptions(b, keys)
         if fresh:
             row = {"id": activity_id, "activity_id": activity_id, "signature": signature, **fresh, "created_at": now_iso()}
             store.insert("class_summaries", row)
-            cached, ai_model = row, row["model"]
+            cached = row
     clusters = []
     if cached:
         for m in cached["misconceptions"]:
@@ -683,7 +735,6 @@ def class_summary(store: Store, activity_id: str) -> dict:
         "per_problem": per_problem,
         "misconceptions": clusters,
         "reteach_focus": cached["reteach_focus"] if cached else "Grade and review more papers to get a suggested reteach focus.",
-        "ai_model": ai_model,
     }
 
 
@@ -701,9 +752,10 @@ def gradebook(store: Store, activity_id: str) -> dict:
             finals = b.problem_finals(s["id"])
             rev = b.reviews.get(s["id"]) or {}
             edits = rev.get("unit_edits") or {}
-            overrides = rev.get("problem_scores") or {}
+            overrides = rev.get("criterion_scores") or {}
             scores = [finals.get(p["id"]) for p in b.problems]
-            edited = [p["id"] in overrides or any(k.startswith(p["id"] + ":") for k in edits) for p in b.problems]
+            legacy = rev.get("problem_scores") or {}
+            edited = [p["id"] in legacy or any(k.startswith(p["id"] + "::") for k in overrides) or any(k.startswith(p["id"] + ":") for k in edits) for p in b.problems]
             just = (d := _dt(rev.get("approved_at"))) is not None and d >= recent
             rows.append({"student_id": st, "student_name": names[st], "status": status[st], "submission_id": s["id"], "scores": scores, "edited": edited, "total": round(sum(v or 0 for v in scores), 2), "just_approved": just})
         else:

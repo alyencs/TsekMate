@@ -54,6 +54,9 @@ export interface Activity extends ActivitySummary {
   settings: ActivitySettings
   problems: Problem[]
   rubric: Criterion[]
+  rubric_total: number // points per problem; equals the sum of the criteria
+  rubric_errors: string[] // why the rubric can't be used for grading yet (empty = ready)
+  rubric_locked: boolean // true once any paper is graded: one rubric scores the whole class
 }
 
 export interface ActivityInput {
@@ -64,6 +67,7 @@ export interface ActivityInput {
   settings: ActivitySettings
   problems: Omit<Problem, 'id'>[]
   rubric: Criterion[]
+  rubric_total: number | null
 }
 
 export interface RubricTemplate {
@@ -108,11 +112,23 @@ export interface ProblemResult {
   units: (Unit & { edited?: boolean })[]
   suggested_score: number
   ai_suggested_score: number
-  criteria_scores: { name: string; awarded: number; points: number }[]
+  /** Every criterion of the activity rubric, in rubric order. `final_score` is the sum of `awarded`. */
+  criteria_scores: CriterionScore[]
+  final_score: number
   max_score: number
   overall_confidence: number
   flags: Flag[]
   student_hint: string
+}
+
+export interface CriterionScore {
+  name: string
+  description: string
+  awarded: number
+  points: number // the rubric's points for this criterion
+  computed: number // what the AI's marks add up to
+  assessed: boolean // false: the AI did not score this criterion; the teacher should
+  edited: boolean // the teacher typed this score
 }
 
 export interface AiResult {
@@ -121,8 +137,6 @@ export interface AiResult {
   max_score: number
   overall_confidence: number
   flags: Flag[]
-  model: string
-  prompt_version: string
   created_at: string
   failure_reason?: string | null
 }
@@ -144,7 +158,7 @@ export interface EditLogEntry {
 
 export interface Review {
   unit_edits: Record<string, UnitEdit> // key: `${problem_id}:${unit_index}`
-  problem_scores: Record<string, number> // teacher-typed final score per problem
+  criterion_scores: Record<string, number> // key: `${problem_id}::${criterion name}`
   feedback: Record<string, string> // per problem
   edit_log: EditLogEntry[]
   final_score: number | null
@@ -239,7 +253,6 @@ export interface ClassSummary {
   misconceptions: Misconception[]
   submissions: { submitted: number; not_submitted: RosterStatusRow[]; unidentified: number }
   reteach_focus: string
-  ai_model: string | null
 }
 
 export interface RosterStatusRow {
@@ -269,7 +282,6 @@ export interface Gradebook {
 export interface ParentMessage {
   en: string
   fil: string
-  model: string
   approved: boolean
 }
 
@@ -294,7 +306,7 @@ export interface AppSettings {
   default_accept_alternate: boolean
   default_rubric_mode: 'manual' | 'ai'
   delete_images_on_approve: boolean
-  ai: { provider: string; model: string; configured: boolean; demo_mode: boolean }
+  ai: { available: boolean; demo_mode: boolean }
   rerouted?: number
 }
 
@@ -313,7 +325,6 @@ export interface Profile {
 export interface RubricDraft {
   criteria: Criterion[]
   points_per_problem: number
-  model: string
-  prompt_version: string
+  problems: string[] // why the drafted points can't be used as they are (the teacher fixes them)
   draft: true
 }

@@ -45,8 +45,9 @@ def fake(monkeypatch):
 
 def test_missing_key(monkeypatch):
     monkeypatch.setattr(get_settings(), "anthropic_api_key", None)
-    with pytest.raises(llm.LLMUnavailable, match="ANTHROPIC_API_KEY"):
+    with pytest.raises(llm.LLMUnavailable) as e:
         llm.call([{"role": "user", "content": "hi"}])
+    assert "ANTHROPIC_API_KEY" in e.value.detail and "ANTHROPIC" not in str(e.value)
 
 
 def test_default_model_is_haiku():
@@ -91,31 +92,39 @@ def test_truncated_empty_and_refusal(fake):
     assert e.value.status == 422
 
 
+TECHNICAL = ("ANTHROPIC", "Claude", "claude", "API", "model", "SDK", "pip ", "SECRET")
+
+
+def teacher_safe(msg: str) -> bool:
+    return not any(t in msg for t in TECHNICAL)
+
+
 @pytest.mark.parametrize(
-    "exc,status,needle",
+    "exc,status,needle,detail",
     [
-        (status_error(anthropic.AuthenticationError, 401, "invalid x-api-key sk-ant-api03-SECRETSECRET"), 503, "ANTHROPIC_API_KEY"),
-        (status_error(anthropic.PermissionDeniedError, 403, "forbidden"), 503, "permission"),
-        (status_error(anthropic.NotFoundError, 404, "model: claude-x"), 503, "ANTHROPIC_MODEL"),
-        (status_error(anthropic.RateLimitError, 429, "rate_limit_error"), 429, "rate limit"),
-        (status_error(anthropic.InternalServerError, 529, "overloaded_error"), 503, "temporarily"),
-        (status_error(anthropic.BadRequestError, 400, "Your credit balance is too low"), 503, "credit"),
-        (status_error(anthropic.BadRequestError, 400, "messages.0: bad image key=sk-ant-api03-SECRETSECRET"), 502, "rejected the request"),
-        (anthropic.APITimeoutError(request=REQ), 504, "timed out"),
-        (anthropic.APIConnectionError(request=REQ), 503, "reach"),
+        (status_error(anthropic.AuthenticationError, 401, "invalid x-api-key sk-ant-api03-SECRETSECRET"), 503, "administrator", "ANTHROPIC_API_KEY"),
+        (status_error(anthropic.PermissionDeniedError, 403, "forbidden"), 503, "administrator", "permission"),
+        (status_error(anthropic.NotFoundError, 404, "model: claude-x"), 503, "administrator", "ANTHROPIC_MODEL"),
+        (status_error(anthropic.RateLimitError, 429, "rate_limit_error"), 429, "busy", "RateLimitError"),
+        (status_error(anthropic.InternalServerError, 529, "overloaded_error"), 503, "temporarily", "overloaded"),
+        (status_error(anthropic.BadRequestError, 400, "Your credit balance is too low"), 503, "administrator", "credit"),
+        (status_error(anthropic.BadRequestError, 400, "messages.0: bad image key=sk-ant-api03-SECRETSECRET"), 502, "couldn't read this paper", "bad image"),
+        (anthropic.APITimeoutError(request=REQ), 504, "too long", "timed out"),
+        (anthropic.APIConnectionError(request=REQ), 503, "couldn't reach", "APIConnectionError"),
     ],
 )
-def test_errors_map_to_safe_messages(fake, exc, status, needle):
+def test_errors_map_to_teacher_messages_and_keep_detail_for_logs(fake, exc, status, needle, detail):
     fake(exc=exc)
     with pytest.raises(llm.LLMError) as e:
         llm.call([{"role": "user", "content": "x"}])
     assert e.value.status == status
-    assert needle in str(e.value)
-    assert "SECRET" not in str(e.value)
+    assert needle in str(e.value) and teacher_safe(str(e.value))  # what a teacher may see
+    assert detail in e.value.detail and "SECRET" not in e.value.detail  # server logs only, key redacted
 
 
-def test_missing_sdk_gives_install_instructions(monkeypatch):
+def test_missing_sdk_gives_install_instructions_to_admins_only(monkeypatch):
     monkeypatch.setattr(get_settings(), "anthropic_api_key", "sk-ant-test")
     monkeypatch.setattr(llm, "sdk_installed", lambda: False)
-    with pytest.raises(llm.LLMUnavailable, match="pip install -r apps/api/requirements.txt"):
+    with pytest.raises(llm.LLMUnavailable) as e:
         llm.call([{"role": "user", "content": "x"}])
+    assert "pip install -r apps/api/requirements.txt" in e.value.detail and teacher_safe(str(e.value))

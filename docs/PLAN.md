@@ -92,7 +92,7 @@ SQL in `apps/api/db/schema.sql`. Private bucket `submissions` for images (signed
 | `rubric_templates` | `id`, `name`, `subject`, `criteria` jsonb |
 | `submissions` | `id`, `activity_id`, `student_id`, `image_path`, `image_hash`, `status` (uploaded, grading, needs_review, ready, approved, failed), `quality` jsonb, timestamps |
 | `ai_results` | `id`, `submission_id`, `problem_results` jsonb, `suggested_score`, `overall_confidence`, `flags` text[], `model`, `prompt_version`, `raw_json` jsonb, `created_at` |
-| `teacher_reviews` | `id`, `submission_id`, `final_score`, `unit_edits` jsonb, `problem_scores` jsonb, `feedback` jsonb, `edit_log` jsonb, `approved`, `approved_at`, timestamps |
+| `teacher_reviews` | `id`, `submission_id`, `final_score`, `unit_edits` jsonb, `criterion_scores` jsonb (was `problem_scores`), `feedback` jsonb, `edit_log` jsonb, `approved`, `approved_at`, timestamps |
 | `class_summaries` | `activity_id`, `misconceptions` jsonb, `reteach_focus`, `model`, `prompt_version` (cache of the one LLM call) |
 | `parent_messages` (stretch) | `id`, `submission_id`, `language`, `text`, `approved`, `sent_at` |
 
@@ -120,7 +120,7 @@ approved; S-014, S-022, S-031 exactly as in the review detail frames; class summ
 | `GET /api/activities/{id}/grading-progress` | Done / checking / waiting per paper |
 | `GET /api/activities/{id}/queue?tab=` | needs_review, ready, approved, all; lowest confidence first |
 | `GET /api/submissions/{id}` | Detail, signed image URL, AI result, review state, next paper |
-| `PATCH /api/submissions/{id}/review` | Transcript, points, final score, feedback edits; every edit logged |
+| `PATCH /api/submissions/{id}/review` | Transcript, verdict, per-criterion scores, feedback edits; every edit logged |
 | `POST /api/submissions/{id}/approve` | Writes to the gradebook; optional image delete |
 | `GET /api/activities/{id}/class-summary` | Code counts + cached LLM misconceptions and reteach focus |
 | `POST /api/activities/{id}/practice` | Teacher practice problems (item 8 above) |
@@ -188,7 +188,7 @@ the Gemini integration was built and only tested with invalid keys; no live Gemi
 architecture is unchanged (one vision call per paper, JSON, Pydantic, retry once, code recompute, routing, review).
 
 **Features.** Grade again (`POST /api/submissions/{id}/regrade`); optional AI rubric draft (`POST /api/rubric/generate`,
-prompt `rubric_v1.0.txt`, points normalized in code, never auto-applied); notifications from real events; profile and
+prompt `rubric_v1.0.txt`, never auto-applied; points no longer normalized since section 11); notifications from real events; profile and
 settings pages (settings persisted in `app_settings`; reduce motion stored locally); class roster with names; identity
 reading added to the single grading call (prompt `grade_v1.1.txt`), conservative roster matching
 (`app/services/roster.py`), manual assignment (`PATCH /api/submissions/{id}/student`), Not submitted / Not identified
@@ -205,3 +205,30 @@ tracking; college sample data; lighter layout and subtle animations.
   Math paper of 2026-036 has no readable name, to demo "Not identified" and assignment. Queue counts (9 / 3 / 26) and the
   dashboard numbers stay as before. Misconception counts now read "14 of 40" because the roster has 40 students.
 - Migration `apps/api/db/migrations/002_roster_identity_notifications_settings.sql` (additive, idempotent).
+
+## 11. Rubric-exact scoring and teacher-facing text
+
+**Problem found.** A custom rubric could show the wrong breakdown on the Review screen: the AI sometimes skipped a
+criterion (silently 0 and not shown, because the screen listed the AI's steps, not the rubric) and its per-step maximum
+was trusted (Method showed /2 for a 3-point criterion). New activities also started with a template rubric filled in.
+
+**Changes.**
+- Rubric empty by default; required "total points per problem"; criteria must add up to it (`scoring.rubric_problems`,
+  checked in the form, on save, on rubric edit, and before grading). Nothing is normalized, truncated, or invented; the
+  AI rubric draft is no longer rescaled.
+- `rubrics.total_points`; `PATCH /api/activities/{id}/rubric` until the first paper is graded, then locked.
+- Scoring in code: step maximum = criterion points; `criteria_scores` lists every rubric criterion with `assessed`;
+  problem score = sum of criteria. Prompt `grade_v1.2.txt` requires every criterion; a gap is retried once, then left
+  at 0 as "Not scored by the AI" (routes to Needs review).
+- Teacher edits are per criterion (`criterion_scores`, 0..criterion points), replacing the per-problem override.
+  Legacy `problem_scores` are spread over criteria on read and converted on the next edit.
+- Teacher-facing text: no model, prompt version, provider, key, or setup terms in any page or API response a teacher
+  sees (`LLMError` carries a plain message and a separate `detail` for logs). The "Review record" is replaced by
+  "AI-assisted draft — Review the suggested score before approving." Metadata stays stored on the server.
+- Migration `003_rubric_total_criterion_scores.sql` (additive, idempotent).
+
+**Tests.** `tests/test_rubric_scoring.py`: 2, 4, 5 criteria = 10, 1 + 2 + 3 + 4, a 20-point and a 5-point rubric, edits,
+approval, gradebook and class summary consistency, coverage retry and placeholder, invalid rubrics, locking, legacy
+overrides, and no technical text in teacher endpoints. Browser regression with a stand-in Claude client covered the
+full flow (37 checks). Live Claude Haiku grading was not run (no API key in this environment).
+

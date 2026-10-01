@@ -35,14 +35,15 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   try {
     res = await fetch(`${API_URL}${path}`, init)
   } catch {
-    throw new ApiError(0, `Cannot reach the TsekMate API at ${API_URL}. Is the server running?`)
+    // Teacher-facing: no URLs or server terms.
+    throw new ApiError(0, "TsekMate can't connect right now. Check your internet connection and try again.")
   }
   if (!res.ok) {
-    let message = `${res.status} ${res.statusText}`
+    let message = res.status >= 500 ? 'Something went wrong on our side. Please try again.' : 'That request could not be completed. Please try again.'
     try {
       const body = await res.json()
       if (typeof body.detail === 'string') message = body.detail
-      else if (Array.isArray(body.detail)) message = body.detail.map((d: { msg: string }) => d.msg).join('; ')
+      else if (Array.isArray(body.detail)) message = 'Some fields are missing or not valid. Check the form and try again.'
     } catch {
       /* not JSON */
     }
@@ -65,6 +66,8 @@ export const api = {
   activities: () => request<ActivitySummary[]>('/api/activities'),
   activity: (id: string) => request<Activity>(`/api/activities/${id}`),
   createActivity: (input: ActivityInput) => request<Activity>('/api/activities', json('POST', input)),
+  updateRubric: (activityId: string, criteria: Activity['rubric'], totalPoints: number | null) =>
+    request<Activity>(`/api/activities/${activityId}/rubric`, json('PATCH', { criteria, total_points: totalPoints })),
   rubricTemplates: () => request<RubricTemplate[]>('/api/rubric-templates'),
   submissions: (activityId: string) => request<UploadedPaper[]>(`/api/activities/${activityId}/submissions`),
   upload: (activityId: string, files: File[]) => {
@@ -77,7 +80,7 @@ export const api = {
   gradingProgress: (activityId: string) => request<GradingProgress>(`/api/activities/${activityId}/grading-progress`),
   queue: (activityId: string, tab: QueueTab) => request<Queue>(`/api/activities/${activityId}/queue?tab=${tab}`),
   submission: (id: string) => request<SubmissionDetail>(`/api/submissions/${id}`),
-  saveReview: (id: string, patch: { unit_edits?: Review['unit_edits']; problem_scores?: Record<string, number | null>; feedback?: Review['feedback'] }) =>
+  saveReview: (id: string, patch: { unit_edits?: Review['unit_edits']; criterion_scores?: Record<string, number | null>; feedback?: Review['feedback'] }) =>
     request<SubmissionDetail>(`/api/submissions/${id}/review`, json('PATCH', patch)),
   approve: (id: string) =>
     request<{ submission: SubmissionDetail; final_score: number; max_score: number }>(`/api/submissions/${id}/approve`, {
@@ -85,7 +88,7 @@ export const api = {
     }),
   classSummary: (activityId: string) => request<ClassSummary>(`/api/activities/${activityId}/class-summary`),
   practice: (activityId: string) =>
-    request<{ items: string[]; model: string }>(`/api/activities/${activityId}/practice`, { method: 'POST' }),
+    request<{ items: string[] }>(`/api/activities/${activityId}/practice`, { method: 'POST' }),
   gradebook: (activityId: string) => request<Gradebook>(`/api/activities/${activityId}/gradebook`),
   sendToSchool: (activityId: string) =>
     request<{ accepted: number; note: string }>('/adapter/grades/draft', json('POST', { activity_id: activityId })),

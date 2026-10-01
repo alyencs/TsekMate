@@ -10,6 +10,7 @@ import { Button } from '../components/ui/Button'
 import { SubjectChip } from '../components/ui/Chip'
 import { ErrorState, Loading } from '../components/ui/States'
 import { StudentLabel } from '../components/ui/StudentLabel'
+import { RubricCard } from '../components/RubricCard'
 
 const ACCEPT = 'image/jpeg,image/png,image/webp,application/pdf'
 
@@ -71,6 +72,7 @@ export default function Upload() {
   }
   const list = (papers.data ?? []).filter((p) => !q || `${p.student_id ?? ''} ${p.student_name ?? ''}`.toLowerCase().includes(q.toLowerCase()))
   const ready = (papers.data ?? []).filter((p) => p.status === 'uploaded' || p.status === 'failed').length
+  const rubricBlocked = (activity.data?.rubric_errors.length ?? 0) > 0
 
   return (
     <AppShell
@@ -82,7 +84,13 @@ export default function Upload() {
             <span className={`h-3 w-3 rounded-full ${ready ? 'bg-[#16A34A]' : 'bg-gray-300'}`} aria-hidden />
             {ready} paper{ready === 1 ? '' : 's'} ready
           </p>
-          <Button size="lg" className="w-[270px]" onClick={grade} disabled={!ready} loading={busy && ready > 0} iconRight={<Sparkles className="h-5 w-5" aria-hidden />}>
+          <Button
+            size="lg"
+            className="w-[270px]"
+            onClick={grade}
+            disabled={!ready || rubricBlocked}
+            title={rubricBlocked ? 'Fix the rubric before grading' : undefined}
+            loading={busy && ready > 0} iconRight={<Sparkles className="h-5 w-5" aria-hidden />}>
             Grade with TsekMate
           </Button>
         </>
@@ -125,6 +133,7 @@ export default function Upload() {
                 {changing ? 'Cancel' : 'Change'}
               </button>
             </div>
+            <RubricCard activity={activity.data} onSaved={(a) => activity.setData(a)} />
 
             <div
               onDragOver={(e) => {

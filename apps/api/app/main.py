@@ -12,7 +12,7 @@ from pydantic import BaseModel
 
 from .config import get_settings
 from .grading import llm
-from .models import ActivityIn, AssignStudent, ProfilePatch, ReviewPatch, RubricRequest, SettingsPatch, SignIn
+from .models import ActivityIn, AssignStudent, ProfilePatch, ReviewPatch, RubricRequest, RubricUpdate, SettingsPatch, SignIn
 from .services import ai_text, core, jobs, notifications
 from .services import settings as app_settings
 from .store import get_store
@@ -59,11 +59,13 @@ async def _cf(_req: Request, e: core.Conflict):
 
 @app.exception_handler(llm.LLMUnavailable)
 async def _llm(_req: Request, e: llm.LLMUnavailable):
+    logging.getLogger("tsekmate").warning("AI unavailable: %s", e.detail)
     return JSONResponse(status_code=503, content={"detail": str(e)})
 
 
 @app.exception_handler(llm.LLMError)
 async def _llm_error(_req: Request, e: llm.LLMError):
+    logging.getLogger("tsekmate").warning("AI error: %s", e.detail)
     return JSONResponse(status_code=e.status, content={"detail": str(e)})
 
 
@@ -107,6 +109,12 @@ def create_activity(body: ActivityIn):
 @app.get("/api/activities/{activity_id}")
 def activity(activity_id: str):
     return core.activity_full(core.Bundle(get_store(), activity_id))
+
+
+@app.patch("/api/activities/{activity_id}/rubric")
+def update_rubric(activity_id: str, body: RubricUpdate):
+    """Edit the rubric before grading starts. Refused once any paper is graded, so one rubric scores the whole class."""
+    return core.update_rubric(get_store(), activity_id, [c.model_dump() for c in body.criteria], body.total_points)
 
 
 @app.get("/api/rubric-templates")
@@ -199,7 +207,8 @@ def _settings_view() -> dict:
     s = get_settings()
     return {
         **app_settings.get(get_store()),
-        "ai": {"provider": "Anthropic Claude", "model": s.anthropic_model, "configured": bool(s.anthropic_api_key) and llm.sdk_installed(), "demo_mode": s.demo_mode},
+        # Teacher-facing: only whether AI grading is available. Model/provider stay in server config and logs.
+        "ai": {"available": bool(s.anthropic_api_key) and llm.sdk_installed(), "demo_mode": s.demo_mode},
     }
 
 
@@ -224,7 +233,7 @@ def read_profile():
         **app_settings.profile(store),
         "email": get_settings().teacher_email,
         "role": "Teacher",
-        "account_status": "Active (single demo teacher account)",
+        "account_status": "Active",
         "activities": len(acts),
         "classes": classes,
         "students": students,
@@ -254,7 +263,7 @@ def submission(sub_id: str):
 
 @app.patch("/api/submissions/{sub_id}/review")
 def review(sub_id: str, body: ReviewPatch):
-    return core.patch_review(get_store(), sub_id, body.unit_edits, body.problem_scores, body.feedback)
+    return core.patch_review(get_store(), sub_id, body.unit_edits, body.criterion_scores, body.feedback)
 
 
 @app.post("/api/submissions/{sub_id}/approve")
@@ -303,7 +312,7 @@ def parent_message(sub_id: str):
     msg = ai_text.parent_message(b, sub_id)
     for lang in ("en", "fil"):
         store.insert("parent_messages", {"id": f"pm-{new_id()[:12]}", "submission_id": sub_id, "language": lang, "text": msg[lang], "approved": False, "sent_at": None, "model": msg["model"], "created_at": now_iso()})
-    return {**msg, "approved": False}
+    return {"en": msg["en"], "fil": msg["fil"], "approved": False}
 
 
 class ParentApprove(BaseModel):
@@ -320,7 +329,7 @@ def parent_message_approve(sub_id: str, body: ParentApprove):
         raise HTTPException(400, "The message is empty.")
     ts = now_iso()
     store.insert("parent_messages", {"id": f"pm-{new_id()[:12]}", "submission_id": sub_id, "language": body.language, "text": body.text.strip(), "approved": True, "sent_at": ts, "model": "teacher-approved", "created_at": ts})
-    return {"sent": True, "note": "Mock delivery: recorded through the adapter, not sent to a real parent app or SMS gateway."}
+    return {"sent": True, "note": "Practice run only: the message was saved but not sent to the parent."}
 
 
 # ---------------------------------------------------------------- adapter (document Section 6.5). NOT an official integration.
@@ -344,7 +353,7 @@ def adapter_grades(body: dict = Body(...)):
     if not activity_id:
         raise HTTPException(400, "activity_id is required.")
     grades = core.approved_grades(get_store(), activity_id)
-    return {"accepted": len(grades), "grades": grades, "note": "Mock adapter: approved grades were packaged as drafts but not sent to any real school system."}
+    return {"accepted": len(grades), "grades": grades, "note": "Practice run only: the grades were prepared but not sent to your school's grading system."}
 
 
 @app.post("/adapter/notifications")

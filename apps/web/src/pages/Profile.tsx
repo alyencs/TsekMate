@@ -130,7 +130,7 @@ export default function Profile() {
             </ul>
           </section>
           <p className="mt-6 text-[13px] text-muted">
-            TsekMate has one teacher account in this prototype. Password changes and more accounts are handled by your school admin.
+            Password changes and new accounts are handled by your school's TsekMate administrator.
           </p>
           <Button
             variant="secondary"

@@ -21,7 +21,7 @@ export default function StudentFeedback() {
   const order = Number(params.get('p')) || 1
   const prob = d?.activity.problems.find((p) => p.order === order) ?? d?.activity.problems[0]
   const result = d?.ai_result?.problems.find((p) => p.problem_id === prob?.id)
-  const score = prob ? d?.review.problem_scores[prob.id] ?? result?.suggested_score : undefined
+  const score = result?.final_score
   const note = prob ? d?.review.feedback[prob.id] ?? '' : ''
   const short = d?.activity.title.includes(':') ? d.activity.title.split(':')[1].trim() : d?.activity.title
   const noun = d?.activity.subject === 'grammar' ? 'Item' : 'Problem'
