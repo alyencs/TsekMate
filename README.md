@@ -59,7 +59,7 @@ Three subjects share one pipeline; only the rubric, labels, and error types chan
 Requirements: Python 3.11, Node 20+.
 
 ```bash
-cp .env.example .env            # add ANTHROPIC_API_KEY for live grading; Supabase is optional for a local run
+cp apps/api/.env.example .env   # add ANTHROPIC_API_KEY for live grading; Supabase is optional for a local run
 
 # API
 cd apps/api
@@ -73,7 +73,13 @@ npm install
 npm run dev                            # http://localhost:5173
 ```
 
-Sign in with the demo teacher account: **areyes@university.edu.ph / tsekmate** (set in `.env`).
+Sign in with the demo teacher account: **areyes@university.edu.ph / tsekmate**. That password is the
+**development-only** default (`APP_ENV=development`, the default); it is refused in production (see *Security* below).
+
+Every API route except `GET /api/health`, `POST /api/auth/signin`, and signed image links requires the teacher's
+session token, which the API issues at sign-in and checks on every request. In development, `AUTH_SECRET` and
+`IMAGE_SIGNING_SECRET` may be left empty: the API then uses random secrets for that run, so you sign in again after a
+restart.
 
 Without `SUPABASE_URL` the API runs on an **in-memory test store** that seeds itself on every start (restart = reset).
 Without `ANTHROPIC_API_KEY` everything works except live AI calls: new uploads are marked "Grading failed" with the
@@ -87,9 +93,10 @@ TsekMate calls Claude from the **backend only**; the browser never sees the key.
 1. Create an API key in the Claude Console (<https://console.anthropic.com/>). API usage is billed per token.
 2. Put it in the repo-root `.env` as `ANTHROPIC_API_KEY=...` and keep `ANTHROPIC_MODEL=claude-haiku-4-5`
    (`.env` is gitignored; never use a `VITE_` prefix for it).
-3. Restart the API and open `http://localhost:8000/api/health`: it shows `"ai_provider": "anthropic"`, `"ai": "configured"`,
-   and the model (this admin endpoint is the only place the model is shown; teachers only see *Ready* or *Not
-   available* in Settings). Then try one paper:
+3. Restart the API, sign in, and open `GET /api/admin/health` with the session token (for example from the browser's
+   developer tools): it shows `"ai_provider": "anthropic"`, `"ai": "configured"`, and the model. This signed-in admin
+   endpoint is the only place the model is shown; the public `/api/health` only answers `{"ok": true}`, and teachers
+   only see *Ready* or *Not available* in Settings. Then try one paper:
    `python scripts/grade.py samples/synthetic/math-synthetic-01.jpg --activity act-linear-eq-quiz1`.
 
 How it is called: one Messages API request per paper with the photo as a base64 image block (PDFs as a document
@@ -126,7 +133,7 @@ pip install -r requirements.txt
 uvicorn app.main:app --port 8000
 ```
 
-`/api/health` then reports `"ai": "configured"`. Papers that failed meanwhile can be retried with **Grade again**.
+`/api/admin/health` then reports `"ai": "configured"`. Papers that failed meanwhile can be retried with **Grade again**.
 
 ### Supabase
 
@@ -140,6 +147,9 @@ uvicorn app.main:app --port 8000
    and `teacher_reviews.criterion_scores`. Older per-problem overrides (`problem_scores`) keep their scores: they are
    spread over the criteria on read and converted on the teacher's next edit. Then run
    `004_token_usage_and_batches.sql`: it adds `ai_results.usage` and the `grading_batches` table (Saver grading).
+   Then run `005_grading_attempts_unique_student.sql` (**required** by this version): it adds
+   `submissions.grading_attempt` (safe grading state) and a unique index so a student has at most one paper per
+   activity. If the index cannot be created, the file shows the query that lists existing duplicates to fix first.
    All migrations are safe to run more than once.
 3. Put `SUPABASE_URL` and `SUPABASE_SERVICE_KEY` (service role, server side only) in `.env`.
 4. Seed or reset with one command: `python scripts/seed.py --reset`
@@ -152,7 +162,8 @@ python scripts/seed.py --reset                                                  
 python scripts/make_synthetic.py        # font-rendered smoke-test papers (never used in the reported evaluation)
 python scripts/evaluate.py              # evaluation on samples/{math,science,grammar} -> samples/eval/report.md
 python scripts/evaluate.py --write-cache  # same, and store results for DEMO_MODE
-cd apps/api && python -m pytest -q      # 41 tests: scoring, routing, schema, retry, Claude adapter, identity, features
+cd apps/api && python -m pytest -q      # 121 tests: scoring, routing, schema, retry, Claude adapter, identity, features, QA fixes
+cd apps/api && python ../../docs/qa/repro_probe.py   # re-checks every QA audit finding (docs/QA-FIX-REPORT.md)
 ```
 
 Seeded activity ids: `act-linear-eq-quiz1`, `act-forces-motion-quiz2`, `act-sva-worksheet3`, `act-fractions-review`.
@@ -172,9 +183,17 @@ Seeded activity ids: `act-linear-eq-quiz1`, `act-forces-motion-quiz2`, `act-sva-
 | `VITE_API_URL` | `http://localhost:8000` | Where the web app finds the API |
 | `DELETE_IMAGES_ON_APPROVE` | `false` | Starting value of the Settings toggle "Delete the photo after approval" |
 | `DEMO_MODE` | `false` | Use cached AI results (by image SHA-256) from `samples/cache` when present |
-| `PUBLIC_API_URL`, `CORS_ORIGINS`, `IMAGE_SIGNING_SECRET` | local values | Signed image links and CORS (`*.vercel.app` is also allowed) |
+| `APP_ENV` | `development` | `production` refuses to start without real secrets and a real teacher password (the Dockerfile sets it) |
+| `AUTH_SECRET` | random per run (development) | Signs teacher session tokens. **Required in production**, at least 32 characters |
+| `IMAGE_SIGNING_SECRET` | random per run (development) | Signs image links (in-memory store). **Required in production**, at least 32 characters, different from `AUTH_SECRET` |
+| `SESSION_HOURS` | `12` | How long a sign-in lasts |
+| `PUBLIC_API_URL`, `CORS_ORIGINS` | local values | Image link base URL; the exact web origins allowed to call the API |
+| `CORS_ORIGIN_REGEX` | (none) | Optional pattern for preview deployments, e.g. `^https://tsekmate(-[a-z0-9-]+)?\.vercel\.app$` |
 | `APP_TIMEZONE` | `Asia/Manila` | "Today" for the dashboard |
-| `DEMO_TEACHER_EMAIL`, `DEMO_TEACHER_PASSWORD` | demo values | The single teacher account |
+| `DEMO_TEACHER_EMAIL`, `DEMO_TEACHER_PASSWORD` | `areyes@university.edu.ph` / `tsekmate` in development only | The single teacher account. In production the password is required, at least 10 characters, and not the demo one |
+| `GRADING_STALE_MINUTES` | `30` | A paper left in "grading" this long by a run that no longer exists is released for Grade again |
+
+Generate secrets with `python -c "import secrets; print(secrets.token_urlsafe(48))"`.
 
 Never commit `.env`.
 
@@ -333,9 +352,15 @@ tested with a stubbed model and font-rendered smoke-test images, which are exclu
 
 ## API
 
+All routes below require `Authorization: Bearer <token>` except `GET /api/health`, `POST /api/auth/signin`, and
+`GET /api/images/...` (an expiring HMAC-signed link). Requests without a valid token get `401`.
+
 | Method and path | Purpose |
 |---|---|
-| `POST /api/auth/signin` | Demo teacher sign-in |
+| `GET /api/health` | Public liveness check: `{"ok": true}` only |
+| `POST /api/auth/signin` | Teacher sign-in; returns the session `token` and `expires_at` (throttled after 5 failures) |
+| `GET /api/auth/me`, `POST /api/auth/signout` | Current session; sign out (the token is revoked on the server) |
+| `GET /api/admin/health` | Store, AI configuration, and model (signed in) |
 | `GET /api/dashboard` | Stat cards and deltas |
 | `GET/POST /api/activities`, `GET /api/activities/{id}` | Activities (with roster size, not submitted, unidentified counts) |
 | `GET /api/rubric-templates` | Rubric template dropdown |
@@ -349,27 +374,41 @@ tested with a stubbed model and font-rendered smoke-test images, which are exclu
 | `GET /api/activities/{id}/roster` | **Roster with submission status** (incl. Not submitted) |
 | `GET /api/activities/{id}/queue?tab=` | `needs_review`, `ready`, `approved`, `all` |
 | `GET /api/submissions/{id}` | Detail with signed image URL, AI result, identity, roster, review state |
-| `PATCH /api/submissions/{id}/review` | Step edits, per-criterion scores (`criterion_scores`, key `problem_id::criterion`), feedback (logged) |
-| `POST /api/submissions/{id}/approve` | Approve and write to the gradebook (needs an assigned student) |
-| `GET /api/activities/{id}/class-summary`, `POST .../practice` | Summary (incl. submissions); teacher practice problems |
+| `PATCH /api/submissions/{id}/review` | Step edits, per-criterion scores (`criterion_scores`, key `problem_id::criterion`), feedback (logged). A change to an approved paper withdraws its approval until it is approved again |
+| `POST /api/submissions/{id}/approve` | Approve and write to the gradebook (needs an assigned student; refused while the paper is being graded) |
+| `GET /api/activities/{id}/class-summary` | Summary from the reviewed grades plus the cached AI part (`ai_summary.stale` when errors changed). Never calls the AI |
+| `POST /api/activities/{id}/class-summary/refresh` | One AI call that names the misconceptions; only when the teacher asks |
+| `POST /api/activities/{id}/practice` | Teacher practice problems (AI) |
 | `GET /api/activities/{id}/gradebook` | Mock gradebook with names and statuses |
 | `GET /api/notifications`, `POST /api/notifications/{id}/read`, `POST /api/notifications/read-all` | **Notifications** |
 | `GET/PATCH /api/settings` | **Settings** (threshold, defaults, photo deletion; AI model read-only) |
 | `GET/PATCH /api/profile` | **Profile** (name, department; stats) |
-| `POST /api/submissions/{id}/parent-message` (+ `/approve`) | Stretch: EN + FIL draft, teacher approval |
+| `GET /api/submissions/{id}/parent-message` | Saved EN + FIL draft (no AI call); approved papers only |
+| `POST /api/submissions/{id}/parent-message` (+ `/approve`) | Stretch: draft a new EN + FIL message with AI; teacher approval. Approved papers only |
 | `GET /adapter/activities`, `GET /adapter/submissions`, `POST /adapter/grades/draft`, `POST /adapter/notifications` | Mock adapter |
 
-The adapter endpoints are thin wrappers over the mock gradebook. **This is not an official integration.** Interactive
-docs: `http://localhost:8000/docs`.
+The adapter endpoints are thin wrappers over the mock gradebook and return student IDs and grades, so they require the
+teacher session like every other data route. **This is not an official integration.** Interactive docs:
+`http://localhost:8000/docs` (development only; turned off when `APP_ENV=production`).
+
+Uploads are checked by their content, not the browser's declared type: JPEG, PNG, WEBP, or PDF; at most 10 MB per file,
+100 files per request, and 40 megapixels per image. The same photo cannot be uploaded twice to one activity, and a
+student can have only one paper per activity.
 
 ---
 
 ## Deploy
 
 - **Web (Vercel)**: project root `apps/web`, set `VITE_API_URL` to the API URL. `vercel.json` adds the SPA rewrite.
-- **API (Google Cloud Run)**: `apps/api/Dockerfile` (command in the file header). Set the env vars above as secrets.
-  The Dockerfile has not been built in our environment (no Docker daemon). One worker: grading jobs run in background
-  threads, so the job list is per instance.
+- **API (Google Cloud Run)**: `apps/api/Dockerfile` (command in the file header). The image sets `APP_ENV=production`
+  and runs as a non-root user, so it **refuses to start** until `AUTH_SECRET`, `IMAGE_SIGNING_SECRET`, and a real
+  `DEMO_TEACHER_PASSWORD` are set (use Secret Manager). Set `CORS_ORIGINS` to the exact web origin.
+  Deploy with `--no-cpu-throttling --min-instances=1 --max-instances=1`: grading and the Saver batch poller run in
+  background threads, which Cloud Run would otherwise starve of CPU between requests, and grading progress and the
+  confidence threshold live in that one process. If the process restarts mid-grading, the papers it was grading are
+  released automatically (back to *uploaded*, or *Grading failed: interrupted*) and can be graded again.
+  The Dockerfile has not been built in our environment (no Docker daemon).
+- **Database**: run migration `005_grading_attempts_unique_student.sql` before deploying this version.
 - Fallback: demo from a laptop with the local setup above.
 
 ---
@@ -377,6 +416,8 @@ docs: `http://localhost:8000/docs`.
 ## Limits (stated openly)
 
 - Live Claude Haiku grading has not been run yet (no API key while building); see Evaluation.
+- One teacher account (from env vars). Every activity and paper belongs to it, so there is no per-class or
+  per-teacher authorization yet; adding more teachers needs an ownership column and checks on every route.
 - Accuracy depends on handwriting and photo quality; diagrams and unusual notation are not handled.
 - Confidence (grading and identity) is model-reported, not calibrated.
 - Name matching is deliberately conservative: similar names or nicknames may need the teacher to assign the student.
