@@ -38,7 +38,7 @@ export function Button({
 }: ButtonProps) {
   return (
     <button
-      className={`inline-flex items-center justify-center gap-2 whitespace-nowrap font-semibold transition-colors disabled:cursor-not-allowed ${
+      className={`inline-flex items-center justify-center gap-2 whitespace-nowrap font-semibold transition-[background-color,color,border-color,transform] duration-150 active:scale-[0.98] disabled:active:scale-100 disabled:cursor-not-allowed ${
         variant === 'link' ? '' : sizes[size]
       } ${variants[variant]} ${className}`}
       disabled={disabled || loading}

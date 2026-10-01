@@ -1,0 +1,174 @@
+import { useEffect, useState } from 'react'
+import { CircleAlert, CircleCheck } from 'lucide-react'
+import { api } from '../lib/api'
+import type { AppSettings, FeedbackStyle } from '../lib/types'
+import { getReduceMotion, loadSettings, setReduceMotion, setSettingsCache } from '../lib/appSettings'
+import { AppShell, TopBar } from '../components/layout/AppShell'
+import { Toggle } from '../components/ui/Toggle'
+import { ErrorState, Loading } from '../components/ui/States'
+
+export default function Settings() {
+  const [s, setS] = useState<AppSettings | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const [saved, setSaved] = useState<string | null>(null)
+  const [motion, setMotion] = useState(getReduceMotion())
+
+  useEffect(() => {
+    loadSettings(true)
+      .then(setS)
+      .catch((e: Error) => setError(e.message))
+  }, [])
+
+  async function save(patch: Partial<Omit<AppSettings, 'ai'>>, label: string) {
+    setSaved(null)
+    try {
+      const r = await api.saveSettings(patch)
+      setS(r)
+      setSettingsCache(r)
+      setSaved(r.rerouted ? `${label} saved. ${r.rerouted} paper${r.rerouted === 1 ? '' : 's'} moved between "Needs review" and "Ready to approve".` : `${label} saved.`)
+    } catch (e) {
+      setSaved(null)
+      setError((e as Error).message)
+    }
+  }
+
+  return (
+    <AppShell active="settings" topbar={<TopBar title="Settings" />}>
+      {error ? (
+        <ErrorState message={error} onRetry={() => window.location.reload()} />
+      ) : !s ? (
+        <Loading />
+      ) : (
+        <div className="mx-auto flex max-w-[760px] flex-col gap-6">
+          {saved && (
+            <p role="status" className="animate-fade rounded-ctl border border-ok-border bg-ok-bg px-4 py-2.5 text-[14px] text-ok-text">
+              {saved}
+            </p>
+          )}
+
+          <Section title="AI grading">
+            <div className="flex items-start justify-between gap-6">
+              <div>
+                <p className="text-[15px] font-semibold">AI model</p>
+                <p className="mt-0.5 text-[13px] text-muted">Set on the server with ANTHROPIC_MODEL in .env (not changeable here, so the key and model stay server side).</p>
+              </div>
+              <div className="shrink-0 text-right">
+                <p className="font-mono text-[14px]">{s.ai.model}</p>
+                <p className={`mt-1 inline-flex items-center gap-1 text-[12px] font-semibold ${s.ai.configured ? 'text-ok-text' : 'text-bad-text'}`}>
+                  {s.ai.configured ? <CircleCheck className="h-3.5 w-3.5" aria-hidden /> : <CircleAlert className="h-3.5 w-3.5" aria-hidden />}
+                  {s.ai.provider} {s.ai.configured ? 'connected' : 'not configured (ANTHROPIC_API_KEY missing)'}
+                  {s.ai.demo_mode ? ' · demo mode on' : ''}
+                </p>
+              </div>
+            </div>
+            <div>
+              <label htmlFor="threshold" className="flex items-center justify-between text-[15px] font-semibold">
+                Confidence threshold
+                <span className="font-mono text-[14px] text-brand-dark">{Math.round(s.confidence_threshold * 100)}%</span>
+              </label>
+              <p className="mt-0.5 text-[13px] text-muted">
+                A paper goes to &quot;Needs review&quot; if any step is below this confidence. Changing it re-sorts papers that are not approved yet.
+              </p>
+              <input
+                id="threshold"
+                type="range"
+                min={0.5}
+                max={0.95}
+                step={0.05}
+                value={s.confidence_threshold}
+                onChange={(e) => setS({ ...s, confidence_threshold: Number(e.target.value) })}
+                onMouseUp={() => save({ confidence_threshold: s.confidence_threshold }, 'Confidence threshold')}
+                onKeyUp={() => save({ confidence_threshold: s.confidence_threshold }, 'Confidence threshold')}
+                onTouchEnd={() => save({ confidence_threshold: s.confidence_threshold }, 'Confidence threshold')}
+                className="mt-3 w-full accent-brand"
+              />
+            </div>
+            <fieldset>
+              <legend className="text-[15px] font-semibold">Default feedback mode for new activities</legend>
+              <div className="mt-2 flex gap-3">
+                {(
+                  [
+                    ['hint_only', 'Hint only'],
+                    ['full_solution', 'Full solution'],
+                  ] as [FeedbackStyle, string][]
+                ).map(([v, l]) => (
+                  <label key={v} className={`flex cursor-pointer items-center gap-2 rounded-ctl border px-4 py-2 text-[14px] ${s.default_feedback_style === v ? 'border-brand bg-brand-light/50 font-semibold' : 'border-line'}`}>
+                    <input type="radio" name="fb" className="accent-brand" checked={s.default_feedback_style === v} onChange={() => save({ default_feedback_style: v }, 'Default feedback mode')} />
+                    {l}
+                  </label>
+                ))}
+              </div>
+            </fieldset>
+          </Section>
+
+          <Section title="Grading defaults">
+            <Toggle
+              id="alt"
+              checked={s.default_accept_alternate}
+              onChange={(v) => save({ default_accept_alternate: v }, 'Alternate methods default')}
+              label="Accept alternate valid methods"
+              description="Starting value of this setting when you create a new activity."
+            />
+            <fieldset>
+              <legend className="text-[15px] font-semibold">Default rubric option</legend>
+              <p className="mt-0.5 text-[13px] text-muted">Which rubric option is selected first when you create an activity. AI drafts always need your review.</p>
+              <div className="mt-2 flex gap-3">
+                {(
+                  [
+                    ['manual', 'Create your own rubric'],
+                    ['ai', 'Generate rubric with AI'],
+                  ] as const
+                ).map(([v, l]) => (
+                  <label key={v} className={`flex cursor-pointer items-center gap-2 rounded-ctl border px-4 py-2 text-[14px] ${s.default_rubric_mode === v ? 'border-brand bg-brand-light/50 font-semibold' : 'border-line'}`}>
+                    <input type="radio" name="rubric" className="accent-brand" checked={s.default_rubric_mode === v} onChange={() => save({ default_rubric_mode: v }, 'Default rubric option')} />
+                    {l}
+                  </label>
+                ))}
+              </div>
+            </fieldset>
+          </Section>
+
+          <Section title="Privacy">
+            <Toggle
+              id="del"
+              checked={s.delete_images_on_approve}
+              onChange={(v) => save({ delete_images_on_approve: v }, 'Photo deletion')}
+              label="Delete the photo after approval"
+              description="After you approve a paper, its photo is deleted from storage. Scores, feedback, and the review record are kept."
+            />
+            <p className="text-[13px] leading-relaxed text-muted">
+              Photos are stored in a private bucket and shown only through short-lived signed links. Each photo, including the name written on it, is sent to Anthropic&apos;s Claude API for grading.
+              Use only synthetic papers or papers from people who agreed, until your school has a data processing agreement in place.
+            </p>
+          </Section>
+
+          <Section title="Interface" note="Saved in this browser only">
+            <Toggle
+              id="motion"
+              checked={motion}
+              onChange={(v) => {
+                setMotion(v)
+                setReduceMotion(v)
+                setSaved('Motion preference saved in this browser.')
+              }}
+              label="Reduce motion"
+              description="Turns off page and panel animations. TsekMate also follows your system's reduce-motion setting."
+            />
+          </Section>
+        </div>
+      )}
+    </AppShell>
+  )
+}
+
+function Section({ title, note, children }: { title: string; note?: string; children: React.ReactNode }) {
+  return (
+    <section className="card px-8 py-7" aria-label={title}>
+      <div className="flex items-baseline justify-between">
+        <h2 className="text-[17px] font-semibold">{title}</h2>
+        {note && <span className="text-[12px] text-muted">{note}</span>}
+      </div>
+      <div className="mt-5 flex flex-col gap-6">{children}</div>
+    </section>
+  )
+}

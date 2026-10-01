@@ -66,6 +66,7 @@ def evaluate(items, write_cache: bool) -> dict:
     catches = defaultdict(lambda: {"planted": 0, "caught": 0, "type_match": 0})
     abs_err = []
     failures = 0
+    ident = {"papers": 0, "name_correct": 0, "id_correct": 0, "missing_handled": 0, "missing": 0}
     for img, gt in items:
         t = time.time()
         res = grade_file(img, gt["activity_id"])
@@ -75,6 +76,17 @@ def evaluate(items, write_cache: bool) -> dict:
             per_paper.append({"file": img.name, "status": "failed", "error": str(res["raw_json"].get("error", ""))[:300]})
             continue
         by_pid = {p["problem_id"]: p for p in res["problem_results"]}
+        if "student_name" in gt:  # identity reading is measured separately from grading
+            got = res.get("identity") or {}
+            from app.services.roster import norm_id, norm_name
+
+            if gt["student_name"] or gt.get("student_id"):
+                ident["papers"] += 1
+                ident["name_correct"] += norm_name(got.get("student_name")) == norm_name(gt["student_name"])
+                ident["id_correct"] += norm_id(got.get("student_id")) == norm_id(gt.get("student_id"))
+            else:
+                ident["missing"] += 1
+                ident["missing_handled"] += not got.get("student_name") and not got.get("student_id")
         paper = {"file": img.name, "style": gt.get("style", "unknown"), "writer": gt.get("writer"), "status": res["status"], "seconds": round(dt, 1), "problems": []}
         for gp in gt["problems"]:
             ap = by_pid.get(gp["problem_id"])
@@ -124,6 +136,7 @@ def evaluate(items, write_cache: bool) -> dict:
             "unflagged_items": unflagged["n"],
             "unflagged_disagreement_rate": rate(unflagged["disagree"], unflagged["n"]),
         },
+        "identity": {**ident, "name_accuracy": rate(ident["name_correct"], ident["papers"]), "id_accuracy": rate(ident["id_correct"], ident["papers"])},
         "per_paper": per_paper,
     }
 
@@ -168,6 +181,11 @@ def markdown(r: dict, smoke: bool, model: str) -> str:
         "",
         "Flags are useful if the flagged disagreement rate is clearly higher than the unflagged one.",
         "",
+        "## Student identity (name and ID read from the paper)",
+        "",
+        f"- Papers with a name or ID: {r['identity']['papers']}. Name read correctly: {f(r['identity']['name_accuracy'])}. ID read correctly: {f(r['identity']['id_accuracy'])}.",
+        f"- Papers without a name: {r['identity']['missing']}, reported as not identified: {r['identity']['missing_handled']}. Identity never changes the grade.",
+        "",
         "## Limits",
         "",
         "- Very small sample from a few writers; per-style numbers rest on a handful of problems each.",
@@ -188,14 +206,14 @@ def main() -> None:
         raise SystemExit("No samples with ground truth found. See samples/README.md.")
     from app.config import get_settings
 
-    if not get_settings().gemini_api_key:
-        raise SystemExit("GEMINI_API_KEY is not set; the evaluation needs live AI calls.")
+    if not get_settings().anthropic_api_key:
+        raise SystemExit("ANTHROPIC_API_KEY is not set; the evaluation needs live AI calls.")
     r = evaluate(items, a.write_cache)
     out = ROOT / "samples" / "eval"
     out.mkdir(exist_ok=True)
     stem = "smoke_test" if a.include_synthetic else "report"
     (out / f"{stem}.json").write_text(json.dumps(r, indent=2))
-    (out / f"{stem}.md").write_text(markdown(r, a.include_synthetic, get_settings().gemini_model))
+    (out / f"{stem}.md").write_text(markdown(r, a.include_synthetic, get_settings().anthropic_model))
     print((out / f"{stem}.md").read_text())
 
 

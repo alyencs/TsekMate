@@ -12,8 +12,9 @@ from pydantic import BaseModel
 
 from .config import get_settings
 from .grading import llm
-from .models import ActivityIn, ReviewPatch, SignIn
-from .services import ai_text, core, jobs
+from .models import ActivityIn, AssignStudent, ProfilePatch, ReviewPatch, RubricRequest, SettingsPatch, SignIn
+from .services import ai_text, core, jobs, notifications
+from .services import settings as app_settings
 from .store import get_store
 from .store.base import now_iso, new_id, verify_signature
 
@@ -29,6 +30,7 @@ async def lifespan(_app: FastAPI):
 
         counts = build(store)
         logging.getLogger("tsekmate").info("In-memory store seeded: %s", counts)
+    app_settings.apply(store)
     yield
 
 
@@ -71,11 +73,10 @@ def health():
     return {
         "ok": True,
         "store": get_store().kind,
-        "ai_provider": "gemini",
-        "ai": "configured" if s.gemini_api_key else "missing GEMINI_API_KEY",
-        "model": s.gemini_model,
+        "ai_provider": "anthropic",
+        "ai": "configured" if s.anthropic_api_key else "missing ANTHROPIC_API_KEY",
+        "model": s.anthropic_model,
         "demo_mode": s.demo_mode,
-        "delete_images_on_approve": s.delete_images_on_approve,
     }
 
 
@@ -84,7 +85,8 @@ def signin(body: SignIn):
     s = get_settings()
     if body.email.strip().lower() != s.teacher_email.lower() or body.password != s.teacher_password:
         raise HTTPException(401, "Email or password is incorrect.")
-    return {"name": "Ms. Reyes", "email": s.teacher_email, "class_name": "Grade 8 Rizal"}
+    p = app_settings.profile(get_store())
+    return {"name": p["name"], "email": s.teacher_email, "class_name": p["department"]}
 
 
 @app.get("/api/dashboard")
@@ -147,6 +149,92 @@ def delete_submission(sub_id: str):
 @app.post("/api/activities/{activity_id}/grade")
 def grade(activity_id: str):
     return jobs.start(get_store(), activity_id)
+
+
+@app.post("/api/submissions/{sub_id}/regrade")
+def regrade(sub_id: str):
+    """Grade again: retry one paper (usually after a failed AI call) with the activity's current rubric and settings."""
+    store = get_store()
+    s = store.get("submissions", sub_id)
+    if not s:
+        raise HTTPException(404, "Paper not found.")
+    return jobs.start(store, s["activity_id"], only=sub_id)
+
+
+@app.patch("/api/submissions/{sub_id}/student")
+def assign_student(sub_id: str, body: AssignStudent):
+    return core.assign_student(get_store(), sub_id, body.student_id.strip())
+
+
+@app.get("/api/activities/{activity_id}/roster")
+def roster(activity_id: str):
+    b = core.Bundle(get_store(), activity_id)
+    return {"activity": core.activity_summary(b), "students": core.roster_status(b)}
+
+
+@app.post("/api/rubric/generate")
+def generate_rubric(body: RubricRequest):
+    """Draft a rubric with AI. The result is a draft for the teacher to edit; nothing is saved here."""
+    if not any(p.text.strip() for p in body.problems) and not body.title.strip():
+        raise HTTPException(400, "Add a title or at least one problem first, so the AI knows what the rubric is for.")
+    return ai_text.generate_rubric(body)
+
+
+@app.get("/api/notifications")
+def list_notifications():
+    return notifications.listing(get_store())
+
+
+@app.post("/api/notifications/read-all")
+def read_all_notifications():
+    return notifications.mark_read(get_store())
+
+
+@app.post("/api/notifications/{notification_id}/read")
+def read_notification(notification_id: str):
+    return notifications.mark_read(get_store(), notification_id)
+
+
+def _settings_view() -> dict:
+    s = get_settings()
+    return {
+        **app_settings.get(get_store()),
+        "ai": {"provider": "Anthropic Claude", "model": s.anthropic_model, "configured": bool(s.anthropic_api_key), "demo_mode": s.demo_mode},
+    }
+
+
+@app.get("/api/settings")
+def read_settings():
+    return _settings_view()
+
+
+@app.patch("/api/settings")
+def write_settings(body: SettingsPatch):
+    r = app_settings.update(get_store(), body.model_dump())
+    return {**_settings_view(), "rerouted": r["rerouted"]}
+
+
+@app.get("/api/profile")
+def read_profile():
+    store = get_store()
+    acts = core.list_activities(store)
+    classes = sorted({a["class_name"] for a in acts})
+    students = sum(len(store.select("students", section=c)) for c in classes)
+    return {
+        **app_settings.profile(store),
+        "email": get_settings().teacher_email,
+        "role": "Teacher",
+        "account_status": "Active (single demo teacher account)",
+        "activities": len(acts),
+        "classes": classes,
+        "students": students,
+    }
+
+
+@app.patch("/api/profile")
+def write_profile(body: ProfilePatch):
+    app_settings.update_profile(get_store(), body.model_dump(exclude_none=True))
+    return read_profile()
 
 
 @app.get("/api/activities/{activity_id}/grading-progress")

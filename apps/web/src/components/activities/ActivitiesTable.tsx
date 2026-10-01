@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { ChevronDown, ChevronLeft, ChevronRight, Filter, Plus } from 'lucide-react'
 import type { ActivitySummary, Subject } from '../../lib/types'
-import { SUBJECTS, SUBJECT_LIST, AI_LABEL } from '../../lib/subjects'
+import { SUBJECTS, SUBJECT_LIST } from '../../lib/subjects'
 import { relativeDay } from '../../lib/format'
 import { SubjectChip } from '../ui/Chip'
 import { Button } from '../ui/Button'
@@ -45,7 +45,7 @@ export function ActivitiesTable({
             {title}
           </h2>
           <p className="mt-0.5 text-[13px] text-muted">
-            {active} active assignment{active === 1 ? '' : 's'} across your classes
+            {active} assignment{active === 1 ? '' : 's'} across your classes · grades are AI-assisted drafts until you approve them
           </p>
         </div>
         <div className="flex items-center gap-3">
@@ -115,7 +115,7 @@ export function ActivitiesTable({
               const done = a.papers > 0 && a.to_review === 0
               const target = a.papers === 0 ? `/activities/${a.id}/upload` : done ? `/class-summary?activity=${a.id}` : `/queue?activity=${a.id}`
               return (
-                <tr key={a.id} className="cursor-pointer border-b border-line last:border-0 hover:bg-[#FFFBF7]" onClick={() => navigate(target)}>
+                <tr key={a.id} className="cursor-pointer border-b border-line transition-colors last:border-0 hover:bg-[#FFFBF7]" onClick={() => navigate(target)}>
                   <td className="px-6 py-4">
                     <a
                       href={target}
@@ -127,16 +127,19 @@ export function ActivitiesTable({
                     >
                       {a.title}
                     </a>
-                    {a.to_review > 0 && (
-                      <span className="mt-1.5 block w-fit rounded bg-brand-light px-2 py-1 text-[11px] text-brand-dark">{AI_LABEL}</span>
-                    )}
                   </td>
                   <td className="px-4 py-4">
                     <SubjectChip subject={a.subject} />
                   </td>
                   <td className="px-4 py-4 text-[15px] text-gray-700">{a.class_name}</td>
-                  <td className="px-4 py-4 text-[15px] text-gray-700">{a.papers}</td>
-                  <td className="px-4 py-4 text-[15px] font-medium">{a.papers === 0 ? 'No papers yet' : done ? 'Done' : `${a.to_review} to review`}</td>
+                  <td className="whitespace-nowrap px-4 py-4 text-[15px] text-gray-700">
+                    <span className="tabular-nums">{a.papers}</span>
+                    {a.roster_size > 0 && <span className="text-[13px] text-gray-400"> / {a.roster_size}</span>}
+                  </td>
+                  <td className="px-4 py-4">
+                    <span className="whitespace-nowrap text-[15px] font-medium">{a.papers === 0 ? 'No papers yet' : done ? 'Done' : `${a.to_review} to review`}</span>
+                    {a.not_submitted > 0 && <span className="block text-[12px] text-muted">{a.not_submitted} not submitted</span>}
+                  </td>
                   <td className="px-6 py-4 text-[15px] text-muted">{relativeDay(a.updated_at)}</td>
                 </tr>
               )

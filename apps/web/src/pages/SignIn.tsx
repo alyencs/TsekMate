@@ -52,7 +52,7 @@ export default function SignIn() {
               required
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              placeholder="name@school.edu.ph"
+              placeholder="name@university.edu.ph"
               className="field mt-2 h-12 rounded-[10px]"
             />
             <div className="mt-6 flex items-center justify-between">

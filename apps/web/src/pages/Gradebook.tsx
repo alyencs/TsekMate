@@ -11,6 +11,15 @@ import { AppShell, TopBar } from '../components/layout/AppShell'
 import { Button } from '../components/ui/Button'
 import { SubjectChip } from '../components/ui/Chip'
 import { EmptyState, ErrorState, Loading } from '../components/ui/States'
+import { StudentLabel } from '../components/ui/StudentLabel'
+
+const STATUS_STYLE: Record<string, string> = {
+  Approved: 'text-ok-text',
+  'Not submitted': 'text-gray-400',
+  'Student not identified': 'text-warn-text font-semibold',
+  'Needs review': 'text-warn-text',
+  'Grading failed': 'text-bad-text',
+}
 
 export default function Gradebook() {
   const navigate = useNavigate()
@@ -21,14 +30,14 @@ export default function Gradebook() {
   const acts = useAsync(() => api.activities(), [])
   const book = useAsync(() => (activityId ? api.gradebook(activityId) : Promise.resolve(null)), [activityId])
   const options = (acts.data ?? []).filter((a) => subject === 'all' || a.subject === subject || a.id === activityId)
-  const klass = book.data?.activity.class_name ?? 'Grade 8 Rizal'
+  const klass = book.data?.activity.class_name ?? ''
 
   function exportCsv() {
     if (!book.data) return
     const b = book.data
     downloadCsv(`${b.activity.title.replace(/[^a-z0-9]+/gi, '-')}-gradebook.csv`, [
-      ['Student ID', ...b.columns, 'Total', 'Out of'],
-      ...b.rows.map((r) => [r.student_id, ...r.scores, r.total, r.total === null ? null : b.activity.total_points]),
+      ['Student ID', 'Student name', 'Status', ...b.columns, 'Total', 'Out of'],
+      ...b.rows.map((r) => [r.student_id ?? '', r.student_name ?? 'Not identified', r.status, ...r.scores, r.total, r.total === null ? null : b.activity.total_points]),
     ])
   }
 
@@ -100,9 +109,16 @@ export default function Gradebook() {
             </div>
           </div>
 
-          <div className="card mt-6 px-7 py-4">
-            <p className="text-[12px] font-semibold uppercase tracking-[0.14em] text-gray-500">Mock gradebook with sample data</p>
-          </div>
+          {book.data && (
+            <p className="mt-6 flex flex-wrap items-center gap-x-4 gap-y-1 text-[13px] text-muted">
+              <span className="font-semibold uppercase tracking-[0.12em] text-gray-500">Mock gradebook with sample data</span>
+              <span>
+                {book.data.activity.papers - book.data.activity.unidentified} of {book.data.activity.roster_size} students submitted
+              </span>
+              {book.data.activity.not_submitted > 0 && <span>{book.data.activity.not_submitted} not submitted</span>}
+              {book.data.activity.unidentified > 0 && <span className="text-warn-text">{book.data.activity.unidentified} paper not identified</span>}
+            </p>
+          )}
           {notice && (
             <p role={notice.tone === 'bad' ? 'alert' : 'status'} className={`mt-4 rounded-ctl border px-4 py-3 text-[14px] ${notice.tone === 'bad' ? 'border-bad-border bg-bad-bg text-bad-text' : 'border-ok-border bg-ok-bg text-ok-text'}`}>
               {notice.text}
@@ -120,9 +136,10 @@ export default function Gradebook() {
               <table className="w-full min-w-[900px] text-left">
                 <thead>
                   <tr className="border-b border-line text-[11px] font-semibold uppercase tracking-[0.08em] text-muted">
-                    <th scope="col" className="w-[160px] px-6 py-7">Student ID</th>
+                    <th scope="col" className="w-[230px] px-6 py-5">Student</th>
+                    <th scope="col" className="w-[150px] px-4 py-5">Status</th>
                     {book.data.columns.map((c) => (
-                      <th key={c} scope="col" className="px-4 py-7 text-center">
+                      <th key={c} scope="col" className="px-4 py-5 text-center">
                         {c}
                       </th>
                     ))}
@@ -131,18 +148,19 @@ export default function Gradebook() {
                 <tbody>
                   {book.data.rows.map((r) => (
                     <tr
-                      key={r.student_id}
-                      className={`border-b border-line last:border-0 ${r.just_approved ? 'bg-[#FFF7F0] shadow-[inset_4px_0_0_#F97316]' : ''} ${r.submission_id ? 'cursor-pointer hover:bg-[#FFFBF7]' : ''}`}
+                      key={r.student_id ?? r.submission_id ?? ''}
+                      className={`border-b border-line transition-colors last:border-0 ${r.just_approved ? 'bg-[#FFF7F0] shadow-[inset_4px_0_0_#F97316]' : ''} ${r.submission_id ? 'cursor-pointer hover:bg-[#FFFBF7]' : ''}`}
                       onClick={() => r.submission_id && navigate(`/submissions/${r.submission_id}`)}
                     >
-                      <th scope="row" className="whitespace-nowrap px-6 py-6 text-[15px] font-semibold">
+                      <th scope="row" className="whitespace-nowrap px-6 py-4 text-left font-normal">
                         <span className="flex items-center gap-3">
-                          {r.student_id}
-                          {r.just_approved && <span className="rounded-full bg-brand px-2 py-1 text-[11px] font-semibold text-white">Just approved</span>}
+                          <StudentLabel id={r.student_id} name={r.student_name} />
+                          {r.just_approved && <span className="animate-fade rounded-full bg-brand px-2 py-1 text-[11px] font-semibold text-white">Just approved</span>}
                         </span>
                       </th>
+                      <td className={`whitespace-nowrap px-4 py-4 text-[13px] ${STATUS_STYLE[r.status] ?? 'text-gray-600'}`}>{r.status}</td>
                       {r.scores.map((s, i) => (
-                        <td key={i} className="px-4 py-6 text-center text-[15px]">
+                        <td key={i} className="px-4 py-4 text-center text-[15px] tabular-nums">
                           {s === null ? (
                             <span className="text-gray-300" aria-label="Not approved yet">
                               —

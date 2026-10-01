@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ChevronDown, ChevronUp, CircleCheck, EllipsisVertical, Plus, Trash2 } from 'lucide-react'
+import { ChevronDown, ChevronUp, CircleCheck, EllipsisVertical, Plus, Sparkles, Trash2 } from 'lucide-react'
 import { api } from '../lib/api'
 import type { ActivityInput, Criterion, FeedbackStyle, RubricTemplate, Subject } from '../lib/types'
 import { SUBJECTS, SUBJECT_LIST } from '../lib/subjects'
 import { useAsync } from '../lib/useAsync'
+import { useAppSettings } from '../lib/appSettings'
 import { AppShell, TopBar } from '../components/layout/AppShell'
 import { Button } from '../components/ui/Button'
 import { SubjectIcon } from '../components/ui/Chip'
@@ -31,8 +32,9 @@ export default function CreateActivity() {
   const navigate = useNavigate()
   const [q, setQ] = useState('')
   const templates = useAsync(() => api.rubricTemplates(), [])
+  const classes = useAsync(() => api.profile(), [])
   const [title, setTitle] = useState('')
-  const [klass, setKlass] = useState('Grade 8 Rizal')
+  const [klass, setKlass] = useState('BS Computer Science 2A')
   const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10))
   const [subject, setSubject] = useState<Subject>('math')
   const [problems, setProblems] = useState<ProblemDraft[]>(() => [blank()])
@@ -46,6 +48,19 @@ export default function CreateActivity() {
   const [errors, setErrors] = useState<string[]>([])
   const [saving, setSaving] = useState(false)
   const [step, setStep] = useState(1)
+  const [rubricMode, setRubricMode] = useState<'manual' | 'ai'>('manual')
+  const [rubricFromAi, setRubricFromAi] = useState(false)
+  const [draftOpen, setDraftOpen] = useState(false) // an AI draft exists that was not used or discarded yet
+  const appSettings = useAppSettings()
+  const appliedDefaults = useRef(false)
+  useEffect(() => {
+    // Teacher defaults from Settings (feedback style, alternate methods, rubric mode) for a new activity.
+    if (!appSettings || appliedDefaults.current) return
+    appliedDefaults.current = true
+    setStyle(appSettings.default_feedback_style)
+    setAcceptAlt(appSettings.default_accept_alternate)
+    setRubricMode(appSettings.default_rubric_mode)
+  }, [appSettings])
   const refs = [useRef<HTMLElement>(null), useRef<HTMLElement>(null), useRef<HTMLElement>(null)]
   const cfg = SUBJECTS[subject]
 
@@ -87,6 +102,7 @@ export default function CreateActivity() {
     filled.forEach((p, i) => {
       if (!p.text.trim() || !p.expected_answer.trim()) errs.push(`${cfg.problemNoun} ${i + 1} needs both the ${cfg.problemTextLabel.toLowerCase()} and the ${cfg.expectedLabel.toLowerCase()}.`)
     })
+    if (draftOpen) errs.push('Use or discard the AI-generated rubric draft before saving.')
     if (!rubric.length) errs.push('Add at least one rubric criterion.')
     rubric.forEach((c, i) => {
       if (!c.name.trim() || !(Number(c.points) > 0)) errs.push(`Rubric row ${i + 1} needs a name and points above 0.`)
@@ -154,8 +170,9 @@ export default function CreateActivity() {
             <label className="text-[15px] font-semibold">
               Class
               <select className="field mt-2 h-[44px] font-normal" value={klass} onChange={(e) => setKlass(e.target.value)}>
-                <option>Grade 8 Rizal</option>
-                <option>Grade 7 Mabini</option>
+                {(classes.data?.classes ?? [klass]).map((c) => (
+                  <option key={c}>{c}</option>
+                ))}
               </select>
             </label>
             <label className="text-[15px] font-semibold">
@@ -271,6 +288,7 @@ export default function CreateActivity() {
             <h2 id="rubric-title" className="text-[17px] font-semibold">
               Rubric
             </h2>
+            {rubricMode === 'manual' && (
             <label className="flex items-center gap-3 text-[13px] text-muted">
               Rubric template:
               <select className="h-8 rounded-[6px] border border-line bg-white px-3 text-[15px] text-ink" value={templateId} onChange={(e) => setTemplateId(e.target.value)}>
@@ -281,8 +299,52 @@ export default function CreateActivity() {
                 ))}
               </select>
             </label>
+            )}
           </div>
-          {!templates.data ? (
+          <div role="radiogroup" aria-label="How to make the rubric" className="mt-4 inline-flex rounded-[10px] border border-line bg-white p-1">
+            {(
+              [
+                ['manual', 'Create your own rubric'],
+                ['ai', 'Generate rubric with AI'],
+              ] as const
+            ).map(([m, label]) => (
+              <button
+                key={m}
+                role="radio"
+                aria-checked={rubricMode === m}
+                onClick={() => {
+                  setRubricMode(m)
+                  if (m === 'manual') setDraftOpen(false) // leaving AI mode discards the draft
+                }}
+                className={`flex h-9 items-center gap-1.5 rounded-ctl px-4 text-[14px] transition-colors ${rubricMode === m ? 'bg-brand-light font-semibold text-brand-dark' : 'text-gray-600 hover:text-ink'}`}
+              >
+                {m === 'ai' && <Sparkles className="h-3.5 w-3.5" aria-hidden />}
+                {label}
+              </button>
+            ))}
+          </div>
+          {rubricMode === 'ai' && (
+            <AiRubricPanel
+              subject={subject}
+              title={title}
+              problems={problems}
+              onDraftChange={setDraftOpen}
+              onUse={(criteria) => {
+                setRubric(criteria)
+                setRubricFromAi(true)
+                setDraftOpen(false)
+                setRubricMode('manual')
+              }}
+              onCancel={() => {
+                setDraftOpen(false)
+                setRubricMode('manual')
+              }}
+            />
+          )}
+          {rubricMode === 'manual' && rubricFromAi && (
+            <p className="mt-4 text-[13px] text-muted">This rubric started from an AI-generated draft that you accepted. You can still edit everything below.</p>
+          )}
+          {rubricMode === 'ai' ? null : !templates.data ? (
             <Loading />
           ) : (
             <div className="card mt-6 overflow-visible">
@@ -331,9 +393,16 @@ export default function CreateActivity() {
               </table>
             </div>
           )}
-          <button className="mt-6 flex items-center gap-1.5 text-[15px] font-semibold text-brand-dark hover:underline" onClick={() => setRubric((rs) => [...rs, { name: '', description: '', points: 1 }])}>
-            <Plus className="h-4 w-4" aria-hidden /> Add criterion
-          </button>
+          {rubricMode === 'manual' && (
+            <div className="mt-5 flex items-center justify-between">
+              <button className="flex items-center gap-1.5 text-[15px] font-semibold text-brand-dark hover:underline" onClick={() => setRubric((rs) => [...rs, { name: '', description: '', points: 1 }])}>
+                <Plus className="h-4 w-4" aria-hidden /> Add criterion
+              </button>
+              <p className="text-[13px] text-muted">
+                {total} pts per {cfg.problemNoun.toLowerCase()} × {problems.length} = <b className="text-ink">{total * problems.length} pts</b> for the activity
+              </p>
+            </div>
+          )}
         </section>
 
         {/* ---------------- settings */}
@@ -381,5 +450,126 @@ export default function CreateActivity() {
         )}
       </div>
     </AppShell>
+  )
+}
+
+// ---------------------------------------------------------------- optional AI rubric draft
+function AiRubricPanel({
+  subject,
+  title,
+  problems,
+  onUse,
+  onCancel,
+  onDraftChange,
+}: {
+  subject: Subject
+  title: string
+  problems: ProblemDraft[]
+  onUse: (c: Criterion[]) => void
+  onCancel: () => void
+  onDraftChange: (open: boolean) => void
+}) {
+  const [outcome, setOutcome] = useState('')
+  const [points, setPoints] = useState(10)
+  const [draft, setDraft] = useState<Criterion[] | null>(null)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const sum = (draft ?? []).reduce((s, c) => s + (Number(c.points) || 0), 0)
+  const set = (i: number, patch: Partial<Criterion>) => setDraft((d) => (d ? d.map((c, j) => (j === i ? { ...c, ...patch } : c)) : d))
+
+  async function generate() {
+    setLoading(true)
+    setError(null)
+    try {
+      const r = await api.generateRubric({
+        subject,
+        title,
+        problems: problems.map((p) => ({ text: p.text, expected_answer: p.expected_answer, rule: p.rule })),
+        learning_outcome: outcome,
+        points_per_problem: points,
+      })
+      setDraft(r.criteria)
+      onDraftChange(true)
+    } catch (e) {
+      setError((e as Error).message)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <div className="animate-fade card mt-5 px-6 py-6">
+      <p className="text-[14px] text-gray-700">
+        TsekMate drafts criteria from the subject, title, and {SUBJECTS[subject].problemsNoun} you entered above. Your current rubric is not changed unless you choose <b>Use this rubric</b>.
+      </p>
+      <div className="mt-4 grid grid-cols-[1fr_170px] gap-4">
+        <label className="text-[13px] font-semibold text-gray-600">
+          Expected learning outcome (optional)
+          <input className="field mt-1.5 font-normal" value={outcome} onChange={(e) => setOutcome(e.target.value)} placeholder="e.g. Solve linear equations that need the distributive property" />
+        </label>
+        <label className="text-[13px] font-semibold text-gray-600">
+          Points per {SUBJECTS[subject].problemNoun.toLowerCase()}
+          <input type="number" min={1} max={100} step={1} className="field mt-1.5 font-normal" value={points} onChange={(e) => setPoints(Math.max(1, Number(e.target.value) || 10))} />
+        </label>
+      </div>
+      <div className="mt-4 flex gap-3">
+        <Button icon={<Sparkles className="h-4 w-4" aria-hidden />} onClick={generate} loading={loading}>
+          {draft ? 'Generate again' : 'Generate rubric'}
+        </Button>
+        <Button variant="secondary" onClick={onCancel}>
+          {draft ? 'Discard draft' : 'Back to my own rubric'}
+        </Button>
+      </div>
+      {error && (
+        <p role="alert" className="mt-4 rounded-ctl border border-bad-border bg-bad-bg px-3 py-2 text-[14px] text-bad-text">
+          {error}
+        </p>
+      )}
+      {draft && (
+        <div className="animate-fade mt-6">
+          <p className="inline-flex items-center gap-1.5 rounded border border-warn-border bg-warn-bg px-2 py-1 text-[12px] font-semibold text-warn-text">
+            <Sparkles className="h-3.5 w-3.5" aria-hidden /> AI-generated draft — review and edit before using
+          </p>
+          <table className="mt-3 w-full text-left">
+            <thead>
+              <tr className="border-b border-line text-[11px] font-semibold uppercase tracking-[0.08em] text-muted">
+                <th scope="col" className="w-[220px] py-2 pr-3">Criterion</th>
+                <th scope="col" className="py-2 pr-3">Description</th>
+                <th scope="col" className="w-[80px] py-2 text-right">Points</th>
+                <th scope="col" className="w-[40px]"><span className="sr-only">Remove</span></th>
+              </tr>
+            </thead>
+            <tbody>
+              {draft.map((c, i) => (
+                <tr key={i} className="border-b border-line">
+                  <td className="py-1.5 pr-3">
+                    <input aria-label={`Draft criterion ${i + 1} name`} className="field h-9 font-semibold" value={c.name} onChange={(e) => set(i, { name: e.target.value })} />
+                  </td>
+                  <td className="py-1.5 pr-3">
+                    <input aria-label={`Draft criterion ${i + 1} description`} className="field h-9" value={c.description} onChange={(e) => set(i, { description: e.target.value })} />
+                  </td>
+                  <td className="py-1.5 text-right">
+                    <input aria-label={`Draft criterion ${i + 1} points`} type="number" min={0.5} step={0.5} className="field h-9 w-16 px-2 text-right" value={c.points} onChange={(e) => set(i, { points: Number(e.target.value) })} />
+                  </td>
+                  <td className="py-1.5 text-center">
+                    <button className="rounded p-1 text-gray-400 hover:text-bad-strong" aria-label={`Remove draft criterion ${i + 1}`} onClick={() => setDraft((d) => (d ? d.filter((_, j) => j !== i) : d))}>
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <div className="mt-4 flex items-center justify-between">
+            <p className={`text-[13px] ${sum === points ? 'text-muted' : 'font-semibold text-bad-text'}`}>
+              Total {sum} of {points} points{sum === points ? '' : ' — adjust the points so they add up before using this rubric'}
+            </p>
+            <Button disabled={sum !== points || draft.length === 0 || draft.some((c) => !c.name.trim())} onClick={() => onUse(draft.map((c) => ({ ...c, name: c.name.trim(), points: Number(c.points) })))}>
+              Use this rubric
+            </Button>
+          </div>
+        </div>
+      )}
+    </div>
   )
 }

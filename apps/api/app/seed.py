@@ -19,8 +19,31 @@ from .store.base import Store
 SEED_MODEL = "seed-synthetic"
 SEED_PROMPT = "v1.2"  # matches the mockup's review record; real results use the grader's PROMPT_VERSION
 
-S = [f"S-{i:03d}" for i in range(1, 39)]
-M = [f"M-{i:03d}" for i in range(1, 36)]
+# College sections. Names are fictional (randomly combined common Filipino first and last names), not real students.
+CS_SECTION = "BS Computer Science 2A"
+ED_SECTION = "BS Secondary Education 1B"
+CS_NAMES = [
+    "Juan Dela Cruz", "Maria Santos", "Alex Reyes", "Bea Villanueva", "Carlo Mendoza", "Danica Ramos", "Enrico Bautista",
+    "Francine Aquino", "Gabriel Torres", "Hannah Castillo", "Ivan Flores", "Jasmine Navarro", "Kevin Domingo",
+    "Paolo Mendiola", "Lea Fernandez", "Miguel Salazar", "Nicole Garcia", "Oscar Pascual", "Patricia Lim", "Rafael Cruz",
+    "Sofia Manalo", "Tristan Ocampo", "Ursula Dizon", "Vince Gonzales", "Wendy Soriano", "Xavier Tan", "Ysabel Robles",
+    "Zack Morales", "Angela Rivera", "Bryan Valdez", "Camille de Leon", "Dennis Javier", "Elaine Mercado", "Felix Perez",
+    "Grace Aguilar", "Harold Santiago", "Isabel Lopez", "Joshua Cabrera", "Kathleen Uy", "Lorenzo Velasco",
+]
+ED_NAMES = [
+    "Andrea Bernardo", "Benjo Castro", "Clarisse Diaz", "Dominic Estrada", "Erika Fajardo", "Francis Galang",
+    "Gwen Hernandez", "Hector Ilagan", "Ines Jimenez", "Jerome Katigbak", "Kristine Lacson", "Lance Macaraeg",
+    "Mika Nepomuceno", "Noel Ortega", "Olivia Panganiban", "Pia Quiambao", "Ramon Rosales", "Sheila Sison",
+    "Tomas Tolentino", "Uma Umali", "Vivian Vergara", "Warren Yap", "Yolanda Zamora", "Arvin Abad", "Bianca Briones",
+    "Cedric Caballero", "Daisy Dela Pena", "Edgar Enriquez", "Faye Francisco", "Gino Gatchalian", "Hazel Hilario",
+    "Iris Ignacio", "Jun Jacinto", "Karla Lazaro", "Leo Lucero",
+]
+S = [f"2026-{i:03d}" for i in range(1, 39)]  # 38 papers per activity
+S_ROSTER = [f"2026-{i:03d}" for i in range(1, 41)]  # 40 enrolled: 2026-039 and 2026-040 did not submit
+M = [f"2026-{200 + i:03d}" for i in range(1, 36)]
+NAMES = dict(zip(S_ROSTER, CS_NAMES)) | dict(zip(M, ED_NAMES))
+# Papers whose name/ID is unreadable in the seed, to demo "Student: Not identified" and manual assignment.
+UNIDENTIFIED = {("math", "2026-036")}
 
 # ---------------------------------------------------------------- per-activity plans
 # errors: (problem_index, variant, [fixed students], extra random count)
@@ -28,55 +51,55 @@ PLANS = {
     "math": {
         "students": S,
         "errors": [
-            (1, "dist", ["S-014", "S-005", "S-007", "S-010", "S-012", "S-016", "S-018", "S-021", "S-023", "S-026", "S-029", "S-031", "S-034", "S-037"], 0),
-            (4, "dist", ["S-007", "S-016", "S-026", "S-034"], 0),
-            (0, "sub", ["S-004", "S-008", "S-013", "S-024", "S-033"], 0),
-            (3, "sub", ["S-006", "S-015", "S-028", "S-038"], 0),
-            (2, "comp", ["S-017", "S-022", "S-031"], 0),
-            (1, "nota", ["S-001", "S-019"], 0),
-            (3, "nota", ["S-009", "S-027", "S-036"], 0),
-            (0, "pres", ["S-014", "S-003"], 0),
-            (4, "pres", ["S-010"], 0),
+            (1, "dist", ["2026-014", "2026-005", "2026-007", "2026-010", "2026-012", "2026-016", "2026-018", "2026-021", "2026-023", "2026-026", "2026-029", "2026-031", "2026-034", "2026-037"], 0),
+            (4, "dist", ["2026-007", "2026-016", "2026-026", "2026-034"], 0),
+            (0, "sub", ["2026-004", "2026-008", "2026-013", "2026-024", "2026-033"], 0),
+            (3, "sub", ["2026-006", "2026-015", "2026-028", "2026-038"], 0),
+            (2, "comp", ["2026-017", "2026-022", "2026-031"], 0),
+            (1, "nota", ["2026-001", "2026-019"], 0),
+            (3, "nota", ["2026-009", "2026-027", "2026-036"], 0),
+            (0, "pres", ["2026-014", "2026-003"], 0),
+            (4, "pres", ["2026-010"], 0),
         ],
         # status, overall confidence, review pattern
         "needs_review": {
-            "S-014": ("special", 0.54),
-            "S-002": ("blurry", 0.58),
-            "S-009": ("lowconf_error", 0.62),
-            "S-036": ("unclear", 0.66),
-            "S-019": ("mismatch", 0.71),
-            "S-025": ("subtle", 0.75),
-            "S-027": ("lowconf_error", 0.72),
-            "S-030": ("subtle", 0.84),
-            "S-032": ("subtle", 0.88),
+            "2026-014": ("special", 0.54),
+            "2026-002": ("blurry", 0.58),
+            "2026-009": ("lowconf_error", 0.62),
+            "2026-036": ("unclear", 0.66),
+            "2026-019": ("mismatch", 0.71),
+            "2026-025": ("subtle", 0.75),
+            "2026-027": ("lowconf_error", 0.72),
+            "2026-030": ("subtle", 0.84),
+            "2026-032": ("subtle", 0.88),
         },
-        "ready": ["S-011", "S-020", "S-035"],
-        "graded_today": ["S-014", "S-009", "S-011"],
+        "ready": ["2026-011", "2026-020", "2026-035"],
+        "graded_today": ["2026-014", "2026-009", "2026-011"],
         "approved_when": "today",
-        "edited": {"S-003": {1: 7}},  # teacher overrides shown as "Edited" in the gradebook
+        "edited": {"2026-003": {1: 7}},  # teacher overrides shown as "Edited" in the gradebook
     },
     "science": {
         "students": S,
         "errors": [
-            (2, "units", ["S-022", "S-002", "S-004", "S-006", "S-009", "S-013", "S-018", "S-025", "S-030", "S-035"], 0),
-            (1, "units", ["S-001", "S-004", "S-011", "S-018", "S-027", "S-033"], 0),
-            (3, "units", ["S-006", "S-012", "S-020", "S-025", "S-029", "S-037"], 0),
-            (0, "inv", ["S-003", "S-008", "S-015", "S-021", "S-034"], 0),
-            (2, "inv", ["S-010", "S-016", "S-024", "S-038"], 0),
-            (0, "comp", ["S-005", "S-019"], 0),
-            (1, "comp", ["S-007", "S-014", "S-023"], 0),
-            (2, "comp", ["S-017", "S-028"], 0),
-            (3, "comp", ["S-026", "S-031", "S-036"], 0),
-            (3, "pres", ["S-011", "S-032", "S-001", "S-008"], 0),
+            (2, "units", ["2026-022", "2026-002", "2026-004", "2026-006", "2026-009", "2026-013", "2026-018", "2026-025", "2026-030", "2026-035"], 0),
+            (1, "units", ["2026-001", "2026-004", "2026-011", "2026-018", "2026-027", "2026-033"], 0),
+            (3, "units", ["2026-006", "2026-012", "2026-020", "2026-025", "2026-029", "2026-037"], 0),
+            (0, "inv", ["2026-003", "2026-008", "2026-015", "2026-021", "2026-034"], 0),
+            (2, "inv", ["2026-010", "2026-016", "2026-024", "2026-038"], 0),
+            (0, "comp", ["2026-005", "2026-019"], 0),
+            (1, "comp", ["2026-007", "2026-014", "2026-023"], 0),
+            (2, "comp", ["2026-017", "2026-028"], 0),
+            (3, "comp", ["2026-026", "2026-031", "2026-036"], 0),
+            (3, "pres", ["2026-011", "2026-032", "2026-001", "2026-008"], 0),
         ],
         "needs_review": {
-            "S-022": ("special", 0.58),
-            "S-030": ("unclear", 0.63),
-            "S-009": ("lowconf_error", 0.69),
-            "S-017": ("subtle", 0.77),
-            "S-036": ("mismatch", 0.8),
+            "2026-022": ("special", 0.58),
+            "2026-030": ("unclear", 0.63),
+            "2026-009": ("lowconf_error", 0.69),
+            "2026-017": ("subtle", 0.77),
+            "2026-036": ("mismatch", 0.8),
         },
-        "ready": ["S-002", "S-019"],
+        "ready": ["2026-002", "2026-019"],
         "graded_today": [],
         "approved_when": "yesterday",
         "edited": {},
@@ -84,30 +107,30 @@ PLANS = {
     "grammar": {
         "students": S,
         "errors": [
-            (3, "nearest", ["S-002", "S-004", "S-005", "S-008", "S-010", "S-012", "S-013", "S-016", "S-019", "S-021", "S-024", "S-027", "S-029", "S-033", "S-036"], 0),
-            (0, "miss", ["S-006", "S-017", "S-025", "S-038"], 0),
-            (3, "miss_s", ["S-031", "S-001", "S-009", "S-014", "S-022", "S-034"], 0),
-            (1, "miss_s", ["S-003", "S-011", "S-018", "S-026", "S-030"], 0),
-            (1, "spell", ["S-007", "S-020", "S-028", "S-035"], 0),
-            (2, "spell", ["S-015", "S-023", "S-032", "S-037"], 0),
-            (0, "punct", ["S-003", "S-009", "S-020"], 0),
-            (2, "punct", ["S-001", "S-011", "S-026"], 0),
-            (3, "punct", ["S-007", "S-018", "S-028"], 0),
-            (4, "punct", ["S-005", "S-014", "S-030"], 0),
-            (1, "word", ["S-010", "S-024", "S-037"], 0),
-            (4, "word", ["S-004", "S-016", "S-034"], 0),
-            (4, "rule", ["S-012", "S-031"], 0),
+            (3, "nearest", ["2026-002", "2026-004", "2026-005", "2026-008", "2026-010", "2026-012", "2026-013", "2026-016", "2026-019", "2026-021", "2026-024", "2026-027", "2026-029", "2026-033", "2026-036"], 0),
+            (0, "miss", ["2026-006", "2026-017", "2026-025", "2026-038"], 0),
+            (3, "miss_s", ["2026-031", "2026-001", "2026-009", "2026-014", "2026-022", "2026-034"], 0),
+            (1, "miss_s", ["2026-003", "2026-011", "2026-018", "2026-026", "2026-030"], 0),
+            (1, "spell", ["2026-007", "2026-020", "2026-028", "2026-035"], 0),
+            (2, "spell", ["2026-015", "2026-023", "2026-032", "2026-037"], 0),
+            (0, "punct", ["2026-003", "2026-009", "2026-020"], 0),
+            (2, "punct", ["2026-001", "2026-011", "2026-026"], 0),
+            (3, "punct", ["2026-007", "2026-018", "2026-028"], 0),
+            (4, "punct", ["2026-005", "2026-014", "2026-030"], 0),
+            (1, "word", ["2026-010", "2026-024", "2026-037"], 0),
+            (4, "word", ["2026-004", "2026-016", "2026-034"], 0),
+            (4, "rule", ["2026-012", "2026-031"], 0),
         ],
         "needs_review": {
-            "S-031": ("special", 0.61),
-            "S-012": ("unclear", 0.64),
-            "S-019": ("lowconf_error", 0.68),
-            "S-027": ("subtle", 0.72),
-            "S-006": ("mismatch", 0.78),
-            "S-033": ("subtle", 0.83),
-            "S-038": ("lowconf_error", 0.7),
+            "2026-031": ("special", 0.61),
+            "2026-012": ("unclear", 0.64),
+            "2026-019": ("lowconf_error", 0.68),
+            "2026-027": ("subtle", 0.72),
+            "2026-006": ("mismatch", 0.78),
+            "2026-033": ("subtle", 0.83),
+            "2026-038": ("lowconf_error", 0.7),
         },
-        "ready": ["S-015", "S-023", "S-035"],
+        "ready": ["2026-015", "2026-023", "2026-035"],
         "graded_today": [],
         "approved_when": "3days",
         "edited": {},
@@ -238,7 +261,7 @@ def _confidences(rnd: random.Random, units_by_problem: list[list[dict]], flags_b
 
 # ---------------------------------------------------------------- specials (exact mockup frames)
 def _special(spec_key: str, student: str, units_by_problem: list[list[dict]], flags_by_problem: list[list[str]], overalls: list[float]) -> None:
-    if spec_key == "math" and student == "S-014":
+    if spec_key == "math" and student == "2026-014":
         us = units_by_problem[1]
         us[0].update(confidence=0.96, comment="Correctly identified the starting equation.")
         us[1].update(confidence=0.91)
@@ -246,7 +269,7 @@ def _special(spec_key: str, student: str, units_by_problem: list[list[dict]], fl
         us[3].update(confidence=0.88)
         flags_by_problem[1] = ["unclear_handwriting", "step_mismatch"]
         overalls[1] = 0.54
-    if spec_key == "science" and student == "S-022":
+    if spec_key == "science" and student == "2026-022":
         us = units_by_problem[2]
         us[0].update(confidence=0.97)
         us[1].update(confidence=0.93)
@@ -254,7 +277,7 @@ def _special(spec_key: str, student: str, units_by_problem: list[list[dict]], fl
         us[3].update(confidence=0.90)
         flags_by_problem[2] = ["unclear_handwriting"]
         overalls[2] = 0.58
-    if spec_key == "grammar" and student == "S-031":
+    if spec_key == "grammar" and student == "2026-031":
         us = units_by_problem[3]
         us[0].update(confidence=0.95)
         us[1].update(confidence=0.92)
@@ -278,8 +301,8 @@ def _assign(plan: dict, rnd: random.Random, n_problems: int) -> dict[str, dict[i
     return out
 
 
-def _render(spec: dict, problems: list[dict], student: str, results: list[dict], blur: bool, seed: int) -> tuple[bytes, dict]:
-    header = f"{spec['title'].split(':')[0]}    {student}"
+def _render(spec: dict, problems: list[dict], student: str, results: list[dict], blur: bool, seed: int, hide_name: bool = False) -> tuple[bytes, dict]:
+    header = f"Name: {'' if hide_name else NAMES[student]}    ID: {'' if hide_name else student}"
     blocks = []
     for prob, res in zip(problems, results):
         lines = []
@@ -313,7 +336,7 @@ def _wrap(text: str, width: int) -> str:
 def build(store: Store, now: datetime | None = None, with_images: bool = True) -> dict:
     now = now or datetime.now(timezone.utc)
     rnd = random.Random(20260)
-    store.insert("students", [{"id": s, "section": "Grade 8 Rizal"} for s in S] + [{"id": m, "section": "Grade 7 Mabini"} for m in M])
+    store.insert("students", [{"id": s, "name": NAMES[s], "section": CS_SECTION} for s in S_ROSTER] + [{"id": m, "name": NAMES[m], "section": ED_SECTION} for m in M])
     store.insert("rubric_templates", copy.deepcopy(RUBRIC_TEMPLATES))
 
     when = {
@@ -406,7 +429,7 @@ def build(store: Store, now: datetime | None = None, with_images: bool = True) -
             image_path = None
             image_hash = None
             if with_images:
-                png, boxes = _render(spec, problems, student, results, blurry, seed=n * 7 + len(key))
+                png, boxes = _render(spec, problems, student, results, blurry, seed=n * 7 + len(key), hide_name=(key, student) in UNIDENTIFIED)
                 for r in results:
                     for u in r["units"]:
                         if spec["subject"] == "grammar":
@@ -431,11 +454,21 @@ def build(store: Store, now: datetime | None = None, with_images: bool = True) -
             graded_at = (now - timedelta(minutes=30 + n)) if student in plan["graded_today"] else (when["yesterday"] - timedelta(hours=2, minutes=n))
             if key in ("grammar", "fractions"):
                 graded_at = when[plan["approved_when"]] - timedelta(hours=3, minutes=n)
+            hidden = (key, student) in UNIDENTIFIED
+            id_conf = round(rnd.uniform(0.88, 0.99), 2)
+            identity = (
+                {"status": "unidentified", "method": None, "extracted_name": None, "extracted_id": None, "identity_confidence": 0.0,
+                 "suggested_student_id": None, "reason": "No readable name or student ID on the paper."}
+                if hidden
+                else {"status": "matched", "method": "id", "extracted_name": NAMES[student], "extracted_id": student, "identity_confidence": id_conf,
+                      "suggested_student_id": None, "reason": None}
+            )
             subs.append(
                 {
                     "id": sub_id,
                     "activity_id": spec["id"],
-                    "student_id": student,
+                    "student_id": None if hidden else student,
+                    "identity": identity,
                     "image_path": image_path,
                     "image_hash": image_hash,
                     "status": status,
@@ -453,6 +486,7 @@ def build(store: Store, now: datetime | None = None, with_images: bool = True) -
                     "max_score": total,
                     "overall_confidence": paper_confidence(results),
                     "flags": paper_flags(results),
+                    "identity": {"student_name": identity["extracted_name"], "student_id": identity["extracted_id"], "identity_confidence": identity["identity_confidence"]},
                     "model": SEED_MODEL,
                     "prompt_version": SEED_PROMPT,
                     "raw_json": None,
@@ -511,7 +545,28 @@ def build(store: Store, now: datetime | None = None, with_images: bool = True) -
                 },
             )
         counts[key] = {st: sum(1 for s in subs if s["status"] == st) for st in ("needs_review", "ready", "approved")}
+    _seed_notifications(store, now, counts)
     return counts
+
+
+def _seed_notifications(store: Store, now: datetime, counts: dict) -> None:
+    """Notifications that match the seeded events (the same kinds the app creates live)."""
+    from .services.notifications import add
+
+    def ago(**kw) -> str:
+        return (now - timedelta(**kw)).isoformat()
+
+    m, sc, g = MATH, SCIENCE, GRAMMAR
+    add(store, "upload_done", "3 papers uploaded", f"{m['title']}. Ready to grade.", link=f"/activities/{m['id']}/upload", activity_id=m["id"], created_at=ago(minutes=40), read=True)
+    add(store, "grading_done", "Grading finished: 3 of 3 papers", f"{m['title']}. 2 need review (low confidence or flags).", link=f"/queue?activity={m['id']}", activity_id=m["id"], created_at=ago(minutes=25))
+    add(store, "needs_review", "1 paper needs a student", f"{m['title']}. The name on one paper could not be read. Choose the student in the review screen.",
+        link="/submissions/sub-math-2026-036", activity_id=m["id"], submission_id="sub-math-2026-036", created_at=ago(minutes=24))
+    add(store, "needs_review", f"{counts['math']['needs_review']} submissions need review", f"{m['title']}. Some papers have low-confidence grading results.",
+        link=f"/queue?activity={m['id']}", activity_id=m["id"], created_at=ago(minutes=20))
+    add(store, "needs_review", f"{counts['science']['needs_review']} submissions need review", f"{sc['title']}. Some papers have low-confidence grading results.",
+        link=f"/queue?activity={sc['id']}", activity_id=sc["id"], created_at=ago(days=1))
+    add(store, "needs_review", f"{counts['grammar']['needs_review']} submissions need review", f"{g['title']}. Some papers have low-confidence grading results.",
+        link=f"/queue?activity={g['id']}", activity_id=g["id"], created_at=ago(days=1, hours=3), read=True)
 
 
 def reset_and_seed(store: Store, with_images: bool = True) -> dict:

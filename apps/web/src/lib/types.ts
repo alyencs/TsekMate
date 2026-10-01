@@ -44,6 +44,9 @@ export interface ActivitySummary {
   to_review: number
   flagged: number
   approved: number
+  roster_size: number
+  not_submitted: number
+  unidentified: number
   updated_at: string
 }
 
@@ -152,7 +155,8 @@ export interface Review {
 
 export interface QueueRow {
   submission_id: string
-  student_id: string
+  student_id: string | null
+  student_name: string | null
   status: SubmissionStatus
   focus_problem_id: string | null
   focus_problem_order: number | null
@@ -168,22 +172,42 @@ export interface Queue {
   rows: QueueRow[]
 }
 
+export interface Identity {
+  status?: 'matched' | 'unidentified' | 'pending' | 'manual'
+  method?: 'id' | 'name' | 'teacher' | 'teacher_upload' | null
+  extracted_name?: string | null
+  extracted_id?: string | null
+  identity_confidence?: number
+  suggested_student_id?: string | null
+  reason?: string | null
+}
+
+export interface RosterStudent {
+  id: string
+  name: string
+  has_paper: boolean
+}
+
 export interface SubmissionDetail {
   id: string
-  student_id: string
+  student_id: string | null
+  student_name: string | null
+  identity: Identity
+  roster: RosterStudent[]
   status: SubmissionStatus
   image_url: string | null
   image_deleted: boolean
   activity: Activity
   ai_result: AiResult | null
   review: Review
-  next_submission: { id: string; student_id: string } | null
+  next_submission: { id: string; student_id: string | null; student_name: string | null } | null
   focus_problem_id: string | null
 }
 
 export interface UploadedPaper {
   id: string
-  student_id: string
+  student_id: string | null
+  student_name: string | null
   status: SubmissionStatus
   image_url: string | null
   quality: { ok: boolean; reason: string | null } | null
@@ -193,7 +217,7 @@ export interface GradingProgress {
   total: number
   done: number
   running: boolean
-  items: { submission_id: string; student_id: string; state: 'done' | 'checking' | 'waiting' | 'failed' }[]
+  items: { submission_id: string; student_id: string | null; student_name: string | null; state: 'done' | 'checking' | 'waiting' | 'failed' }[]
 }
 
 export interface Misconception {
@@ -213,12 +237,22 @@ export interface ClassSummary {
   errors_by_type: { error_type: string; label: string; count: number }[]
   per_problem: { label: string; average: number }[]
   misconceptions: Misconception[]
+  submissions: { submitted: number; not_submitted: RosterStatusRow[]; unidentified: number }
   reteach_focus: string
   ai_model: string | null
 }
 
-export interface GradebookRow {
+export interface RosterStatusRow {
   student_id: string
+  student_name: string
+  submission_id: string | null
+  status: string
+}
+
+export interface GradebookRow {
+  student_id: string | null
+  student_name: string | null
+  status: string
   submission_id: string | null
   scores: (number | null)[]
   edited: boolean[]
@@ -237,4 +271,49 @@ export interface ParentMessage {
   fil: string
   model: string
   approved: boolean
+}
+
+export interface AppNotification {
+  id: string
+  kind: 'grading_done' | 'needs_review' | 'grading_failed' | 'regrade_ok' | 'upload_done'
+  title: string
+  body: string
+  link: string | null
+  read: boolean
+  created_at: string
+}
+
+export interface Notifications {
+  unread: number
+  items: AppNotification[]
+}
+
+export interface AppSettings {
+  confidence_threshold: number
+  default_feedback_style: FeedbackStyle
+  default_accept_alternate: boolean
+  default_rubric_mode: 'manual' | 'ai'
+  delete_images_on_approve: boolean
+  ai: { provider: string; model: string; configured: boolean; demo_mode: boolean }
+  rerouted?: number
+}
+
+export interface Profile {
+  name: string
+  department: string
+  title: string
+  email: string
+  role: string
+  account_status: string
+  activities: number
+  classes: string[]
+  students: number
+}
+
+export interface RubricDraft {
+  criteria: Criterion[]
+  points_per_problem: number
+  model: string
+  prompt_version: string
+  draft: true
 }

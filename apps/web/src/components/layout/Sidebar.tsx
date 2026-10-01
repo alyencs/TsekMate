@@ -1,11 +1,11 @@
-import { NavLink, useNavigate } from 'react-router-dom'
+import { Link, NavLink, useNavigate } from 'react-router-dom'
 import { BookOpenText, History, Layers, LayoutGrid, LogOut, Presentation, Settings } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { Avatar, Logo } from '../ui/Logo'
 import { SUBJECTS, SUBJECT_LIST } from '../../lib/subjects'
 import { getTeacher, signOut } from '../../lib/session'
 
-export type NavKey = 'dashboard' | 'activities' | 'queue' | 'summary' | 'gradebook'
+export type NavKey = 'dashboard' | 'activities' | 'queue' | 'summary' | 'gradebook' | 'settings' | 'profile'
 
 const NAV: { key: NavKey; label: string; to: string; icon: typeof LayoutGrid }[] = [
   { key: 'dashboard', label: 'Dashboard', to: '/', icon: LayoutGrid },
@@ -70,7 +70,10 @@ export function Sidebar({ active, variant, queueBadge }: { active?: NavKey; vari
       <div className="mt-auto border-t border-line">
         {variant === 'dashboard' ? (
           <div className="flex flex-col gap-1 px-4 py-4">
-            <FooterButton icon={<Settings className="h-[18px] w-[18px]" aria-hidden />} label="Settings" title="Settings are not part of the prototype" disabled />
+            <NavLink to="/settings" className={`flex h-12 items-center gap-3 rounded-[10px] px-3 text-[15px] transition-colors ${active === 'settings' ? 'bg-brand-light font-semibold text-brand-dark' : 'text-gray-600 hover:bg-gray-50 hover:text-ink'}`}>
+              <Settings className={`h-[18px] w-[18px] ${active === 'settings' ? 'text-brand' : 'text-gray-500'}`} aria-hidden />
+              Settings
+            </NavLink>
             <FooterButton
               icon={<LogOut className="h-[18px] w-[18px]" aria-hidden />}
               label="Log out"
@@ -81,28 +84,22 @@ export function Sidebar({ active, variant, queueBadge }: { active?: NavKey; vari
             />
           </div>
         ) : (
-          <div className="flex items-center gap-3 px-7 py-5">
+          <Link to="/profile" className="flex items-center gap-3 px-7 py-5 transition-colors hover:bg-gray-50" aria-label="Open your profile">
             <Avatar size={32} />
-            <div className="leading-tight">
-              <p className="text-[13px] font-semibold">{teacher?.name ?? 'Ms. Reyes'}</p>
-              <p className="text-[11px] text-muted">{teacher?.class_name ?? 'Grade 8 Rizal'}</p>
+            <div className="min-w-0 leading-tight">
+              <p className="truncate text-[13px] font-semibold">{teacher?.name ?? 'Prof. Ana Reyes'}</p>
+              <p className="truncate text-[11px] text-muted">{teacher?.class_name ?? 'General Education Department'}</p>
             </div>
-          </div>
+          </Link>
         )}
       </div>
     </aside>
   )
 }
 
-function FooterButton({ icon, label, onClick, disabled, title }: { icon: ReactNode; label: string; onClick?: () => void; disabled?: boolean; title?: string }) {
+function FooterButton({ icon, label, onClick }: { icon: ReactNode; label: string; onClick?: () => void }) {
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-disabled={disabled || undefined}
-      title={title}
-      className={`flex h-12 items-center gap-3 rounded-[10px] px-3 text-left text-[15px] text-gray-600 ${disabled ? 'cursor-default' : 'hover:bg-gray-50 hover:text-ink'}`}
-    >
+    <button type="button" onClick={onClick} className="flex h-12 items-center gap-3 rounded-[10px] px-3 text-left text-[15px] text-gray-600 transition-colors hover:bg-gray-50 hover:text-ink">
       <span className="text-gray-500">{icon}</span>
       {label}
     </button>

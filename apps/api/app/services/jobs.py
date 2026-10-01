@@ -9,33 +9,46 @@ from concurrent.futures import ThreadPoolExecutor
 from ..config import get_settings
 from ..grading import grader, llm
 from ..store.base import Store, new_id, now_iso
-from .core import Bundle, touch
+from . import notifications, roster
+from .core import Bundle, Conflict, NotFound, touch
 
 log = logging.getLogger("tsekmate.jobs")
 _jobs: dict[str, dict] = {}
 _lock = threading.Lock()
-# Parallel grading calls. Kept low because Gemini free-tier limits are per minute.
+_match_lock = threading.Lock()  # two papers must not claim the same student at the same time
+# Parallel grading calls. Kept low to stay under per-minute API rate limits.
 WORKERS = max(1, int(os.getenv("GRADING_WORKERS", "2")))
 
 
-def start(store: Store, activity_id: str) -> dict:
+def start(store: Store, activity_id: str, only: str | None = None) -> dict:
+    """Grade every uploaded or failed paper of an activity, or just one paper (`only`, used by Grade again)."""
     b = Bundle(store, activity_id)
     with _lock:
         job = _jobs.get(activity_id)
         if job and job["running"]:
+            if only:
+                raise Conflict("Grading is already running for this activity. Try again when it finishes.")
             return progress(store, activity_id)
-        todo = [s for s in sorted(b.subs, key=lambda s: s["student_id"]) if s["status"] in ("uploaded", "failed")]
+        if only:
+            sub = next((x for x in b.subs if x["id"] == only), None)
+            if not sub:
+                raise NotFound("Paper not found.")
+            if sub["status"] not in ("failed", "uploaded"):
+                raise Conflict("Only papers that are not graded yet, or whose grading failed, can be graded again.")
+            todo = [sub]
+        else:
+            todo = [x for x in sorted(b.subs, key=lambda x: x["created_at"]) if x["status"] in ("uploaded", "failed")]
         if not todo:
             return progress(store, activity_id)
-        ids = [s["id"] for s in todo]
+        ids = [x["id"] for x in todo]
         for sid in ids:
             store.update("submissions", sid, {"status": "grading", "updated_at": now_iso()})
-        _jobs[activity_id] = {"ids": ids, "running": True, "checking": set()}
-    threading.Thread(target=_run, args=(store, activity_id, ids), daemon=True).start()
+        _jobs[activity_id] = {"ids": ids, "running": True, "checking": set(), "retry": bool(only)}
+    threading.Thread(target=_run, args=(store, activity_id, ids, bool(only)), daemon=True).start()
     return progress(store, activity_id)
 
 
-def _run(store: Store, activity_id: str, ids: list[str]) -> None:
+def _run(store: Store, activity_id: str, ids: list[str], retry: bool = False) -> None:
     try:
         with ThreadPoolExecutor(max_workers=WORKERS) as pool:
             list(pool.map(lambda sid: _grade_one(store, activity_id, sid), ids))
@@ -43,6 +56,39 @@ def _run(store: Store, activity_id: str, ids: list[str]) -> None:
         with _lock:
             _jobs[activity_id]["running"] = False
         touch(store, activity_id)
+        try:
+            _notify(store, activity_id, ids, retry)
+        except Exception:  # notifications must never break grading
+            log.exception("could not create grading notification")
+
+
+def _notify(store: Store, activity_id: str, ids: list[str], retry: bool) -> None:
+    b = Bundle(store, activity_id)
+    subs = [x for x in b.subs if x["id"] in ids]
+    failed = [x for x in subs if x["status"] == "failed"]
+    review = [x for x in subs if x["status"] == "needs_review"]
+    unidentified = [x for x in subs if not x.get("student_id") and x["status"] != "failed"]
+    title = b.activity["title"]
+    if retry and subs:
+        x = subs[0]
+        who = b.student_name(x.get("student_id")) or x.get("student_id") or "Unidentified paper"
+        if x["status"] == "failed":
+            reason = (b.ai.get(x["id"], {}).get("raw_json") or {}).get("error", "")
+            notifications.add(store, "grading_failed", f"Grade again failed: {who}", f"{title}. {reason}".strip(), link=f"/submissions/{x['id']}", activity_id=activity_id, submission_id=x["id"])
+        else:
+            notifications.add(store, "regrade_ok", f"Grade again succeeded: {who}", f"{title}. The AI draft is ready for your review.", link=f"/submissions/{x['id']}", activity_id=activity_id, submission_id=x["id"])
+        return
+    parts = []
+    if review:
+        parts.append(f"{len(review)} need{'s' if len(review) == 1 else ''} review (low confidence or flags)")
+    if unidentified:
+        parts.append(f"{len(unidentified)} student{'s' if len(unidentified) != 1 else ''} not identified")
+    notifications.add(store, "grading_done", f"Grading finished: {len(subs) - len(failed)} of {len(subs)} paper{'s' if len(subs) != 1 else ''}",
+                      f"{title}. " + ("; ".join(parts) + "." if parts else "All drafts are ready to approve."), link=f"/queue?activity={activity_id}", activity_id=activity_id)
+    if failed:
+        reason = (b.ai.get(failed[0]["id"], {}).get("raw_json") or {}).get("error", "")
+        notifications.add(store, "grading_failed", f"{len(failed)} paper{'s' if len(failed) != 1 else ''} could not be graded",
+                          f"{title}. {reason} Open the paper and press Grade again.".strip(), link=f"/submissions/{failed[0]['id']}", activity_id=activity_id, submission_id=failed[0]["id"])
 
 
 def _grade_one(store: Store, activity_id: str, sub_id: str) -> None:
@@ -67,7 +113,7 @@ def grade_submission(store: Store, sub_id: str) -> dict:
         result = grader.failed_result(b.activity, b.problems, b.rubric, "none", now_iso(), str(e))
     except llm.LLMError as e:  # provider error with a teacher-safe message (quota, bad key, blocked, ...)
         log.warning("grading failed for %s: %s", sub_id, e)
-        result = grader.failed_result(b.activity, b.problems, b.rubric, get_settings().gemini_model, now_iso(), str(e))
+        result = grader.failed_result(b.activity, b.problems, b.rubric, get_settings().anthropic_model, now_iso(), str(e))
     except Exception as e:  # network errors, refusals, etc.: the teacher grades this paper by hand
         log.exception("grading failed for %s", sub_id)
         result = grader.failed_result(b.activity, b.problems, b.rubric, "unknown", now_iso(), f"{type(e).__name__}: {e}")
@@ -75,7 +121,26 @@ def grade_submission(store: Store, sub_id: str) -> dict:
     store.insert("ai_results", {"id": f"ai-{new_id()[:12]}", "submission_id": sub_id, **result})
     # a fresh AI result resets any earlier review draft for this paper
     store.delete("teacher_reviews", submission_id=sub_id)
-    store.update("submissions", sub_id, {"status": status, "updated_at": now_iso()})
+    patch: dict = {"status": status, "updated_at": now_iso()}
+    with _match_lock:
+        fresh = Bundle(store, s["activity_id"])
+        current = store.get("submissions", sub_id) or s
+        ident = current.get("identity") or {}
+        extracted = result.get("identity") or {}
+        if ident.get("method") in ("teacher_upload", "teacher") and current.get("student_id"):
+            # the teacher already chose the student; keep it and just record what the paper says
+            patch["identity"] = {**ident, "extracted_name": extracted.get("student_name"), "extracted_id": extracted.get("student_id"),
+                                 "identity_confidence": extracted.get("identity_confidence", 0)}
+        elif status == "failed":
+            patch["identity"] = {**ident, "status": "unidentified" if not current.get("student_id") else ident.get("status", "matched"),
+                                 "reason": "Grading failed before the name could be read." if not current.get("student_id") else ident.get("reason")}
+        else:
+            m = roster.match(fresh.roster(), extracted, fresh.taken(), sub_id)
+            patch["identity"] = m
+            patch["student_id"] = m["student_id"] if m["status"] == "matched" else None
+            if m["status"] != "matched" and status == "ready":
+                status = patch["status"] = "needs_review"  # the teacher has to pick the student first
+        store.update("submissions", sub_id, patch)
     return {"status": status, **result}
 
 
@@ -94,6 +159,6 @@ def progress(store: Store, activity_id: str) -> dict:
             continue
         st = s["status"]
         state = "checking" if sid in checking else "waiting" if st in ("grading", "uploaded") else "failed" if st == "failed" else "done"
-        items.append({"submission_id": sid, "student_id": s["student_id"], "state": state})
+        items.append({"submission_id": sid, "student_id": s.get("student_id"), "student_name": b.student_name(s.get("student_id")), "state": state})
     done = sum(1 for i in items if i["state"] in ("done", "failed"))
     return {"total": len(items), "done": done, "running": running, "items": items}

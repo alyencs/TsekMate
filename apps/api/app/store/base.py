@@ -20,6 +20,8 @@ TABLES = [
     "teacher_reviews",
     "class_summaries",
     "parent_messages",
+    "notifications",
+    "app_settings",
 ]
 
 

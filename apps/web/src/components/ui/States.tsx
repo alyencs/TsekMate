@@ -4,7 +4,7 @@ import { Button } from './Button'
 
 export function Loading({ label = 'Loading…' }: { label?: string }) {
   return (
-    <div role="status" aria-live="polite" className="flex items-center justify-center gap-3 py-20 text-muted">
+    <div role="status" aria-live="polite" className="animate-fade flex items-center justify-center gap-3 py-20 text-muted">
       <Loader2 className="h-5 w-5 animate-spin text-brand" aria-hidden />
       <span className="text-[15px]">{label}</span>
     </div>
@@ -30,7 +30,7 @@ export function ErrorState({ message, onRetry }: { message: string; onRetry?: ()
 
 export function EmptyState({ title, children, action }: { title: string; children?: ReactNode; action?: ReactNode }) {
   return (
-    <div className="flex flex-col items-center gap-2 px-6 py-14 text-center">
+    <div className="animate-fade flex flex-col items-center gap-2 px-6 py-14 text-center">
       <span className="flex h-12 w-12 items-center justify-center rounded-full bg-brand-light text-brand">
         <Inbox className="h-6 w-6" aria-hidden />
       </span>

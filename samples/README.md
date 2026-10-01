@@ -18,6 +18,8 @@ samples/
 1. Photograph the paper (flat, good light, no names). Save as `samples/<subject>/<name>.jpg`.
 2. Copy `ground_truth.template.json` to `samples/<subject>/<name>.json` and fill it in:
    - `style`: one of `neat`, `cursive`, `slanted`, `cramped` (results are reported per style).
+   - `student_name` / `student_id`: what is written at the top of the paper (fictional names only), or `null` if the
+     paper has no name. Used to measure identity reading, which is reported separately from grading.
    - `transcript`: what is actually written, one line per step (grammar: the revised sentence, then the rule).
    - `units`: one entry per rubric criterion with the points a careful teacher gives.
    - `planted_errors`: every error you planted on purpose, with its criterion and error type.

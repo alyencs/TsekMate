@@ -9,6 +9,7 @@ import { AppShell, TopBar } from '../components/layout/AppShell'
 import { Button } from '../components/ui/Button'
 import { SubjectChip } from '../components/ui/Chip'
 import { ErrorState, Loading } from '../components/ui/States'
+import { StudentLabel } from '../components/ui/StudentLabel'
 
 const ACCEPT = 'image/jpeg,image/png,image/webp,application/pdf'
 
@@ -33,7 +34,7 @@ export default function Upload() {
     setMsg(null)
     try {
       const added = await api.upload(id, files)
-      setMsg({ tone: 'ok', text: `Uploaded ${added.length} paper${added.length === 1 ? '' : 's'}: ${added.map((a) => a.student_id).join(', ')}.` })
+      setMsg({ tone: 'ok', text: `Uploaded ${added.length} paper${added.length === 1 ? '' : 's'}. TsekMate reads each student's name and ID while grading and matches them to the class roster.` })
       papers.reload()
     } catch (e) {
       setMsg({ tone: 'bad', text: (e as Error).message })
@@ -43,7 +44,7 @@ export default function Upload() {
   }
 
   async function remove(p: UploadedPaper) {
-    if (!confirm(`Delete the paper for ${p.student_id}? You can upload a retake afterwards.`)) return
+    if (!confirm(`Delete the paper for ${p.student_name ?? p.student_id ?? 'this unidentified student'}? You can upload a retake afterwards.`)) return
     try {
       await api.deleteSubmission(p.id)
       papers.reload()
@@ -68,7 +69,7 @@ export default function Upload() {
     setDrag(false)
     upload(Array.from(e.dataTransfer.files))
   }
-  const list = (papers.data ?? []).filter((p) => !q || p.student_id.toLowerCase().includes(q.toLowerCase()))
+  const list = (papers.data ?? []).filter((p) => !q || `${p.student_id ?? ''} ${p.student_name ?? ''}`.toLowerCase().includes(q.toLowerCase()))
   const ready = (papers.data ?? []).filter((p) => p.status === 'uploaded' || p.status === 'failed').length
 
   return (
@@ -158,9 +159,9 @@ export default function Upload() {
               </p>
             )}
 
-            <div className="mt-6 rounded-card border border-[#FBD5B5] bg-[#FFF1E6] px-8 py-6">
-              <p className="text-[15px] font-semibold text-brand-dark">Tips for best results</p>
-              <p className="mt-1.5 text-[15px] text-gray-700">Use good lighting, keep the paper flat, and make sure names are not visible.</p>
+            <div className="mt-6 rounded-card bg-[#FFF1E6] px-6 py-4">
+              <p className="text-[14px] font-semibold text-brand-dark">Tips for best results</p>
+              <p className="mt-1.5 text-[15px] text-gray-700">Use good lighting, keep the paper flat, and make sure the student&apos;s name and ID are readable.</p>
             </div>
 
             <div className="mt-14 flex items-center justify-between">
@@ -192,13 +193,13 @@ function PaperCard({ p, onDelete }: { p: UploadedPaper; onDelete: () => void }) 
   const isPdf = p.image_url?.includes('.pdf')
   return (
     <li>
-      <div className={`relative aspect-[3/4] overflow-hidden rounded-card border bg-[#F9F7F5] ${bad ? 'border-warn-border ring-2 ring-warn-border/60' : 'border-line'}`}>
+      <div className={`lift relative aspect-[3/4] overflow-hidden rounded-card border bg-[#F9F7F5] ${bad ? 'border-warn-border ring-2 ring-warn-border/60' : 'border-line'}`}>
         {p.image_url && !isPdf ? (
-          <img src={p.image_url} alt={`Photo of the paper for ${p.student_id}`} loading="lazy" className="h-full w-full object-cover object-top" />
+          <img src={p.image_url} alt={`Photo of the paper for ${p.student_name ?? p.student_id ?? 'an unidentified student'}`} loading="lazy" className="h-full w-full object-cover object-top" />
         ) : (
           <div className="flex h-full flex-col items-center justify-center gap-2 text-[14px] text-gray-400">
             {isPdf && <FileText className="h-8 w-8" aria-hidden />}
-            {p.student_id}
+            {p.student_id ?? 'Paper'}
           </div>
         )}
         <span className={`absolute right-2.5 top-2.5 flex h-6 items-center gap-1 rounded-full px-2 text-[11px] font-semibold text-white ${bad ? 'bg-[#CA8A04]' : 'bg-[#16A34A]'}`}>
@@ -207,10 +208,14 @@ function PaperCard({ p, onDelete }: { p: UploadedPaper; onDelete: () => void }) 
         </span>
         {bad && <span className="absolute inset-x-2 bottom-2 rounded-ctl border border-line bg-white/95 px-2 py-1.5 text-[12px] font-semibold text-warn-text">{p.quality?.reason}</span>}
       </div>
-      <div className="mt-2 flex items-center justify-between px-1">
-        <span className="text-[14px] font-semibold">{p.student_id}</span>
+      <div className="mt-2 flex items-center justify-between gap-2 px-1">
+        {p.student_id ? (
+          <StudentLabel id={p.student_id} name={p.student_name} size="sm" />
+        ) : (
+          <span className="text-[13px] font-medium text-muted">{p.status === 'uploaded' || p.status === 'grading' ? 'Name read when graded' : 'Not identified'}</span>
+        )}
         {p.status !== 'approved' && (
-          <button onClick={onDelete} className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-bad-strong" aria-label={`Delete paper ${p.student_id}`}>
+          <button onClick={onDelete} className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-bad-strong" aria-label={`Delete paper ${p.student_name ?? p.student_id ?? 'not identified'}`}>
             <Trash2 className="h-4 w-4" />
           </button>
         )}

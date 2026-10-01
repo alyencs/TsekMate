@@ -20,9 +20,9 @@ def _bool(name: str, default: bool = False) -> bool:
 
 class Settings:
     def __init__(self) -> None:
-        # Google Gemini (server side only; never exposed to the web app).
-        self.gemini_api_key: str | None = os.getenv("GEMINI_API_KEY") or None
-        self.gemini_model: str = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
+        # Anthropic Claude (server side only; never exposed to the web app).
+        self.anthropic_api_key: str | None = os.getenv("ANTHROPIC_API_KEY") or None
+        self.anthropic_model: str = os.getenv("ANTHROPIC_MODEL", "claude-haiku-4-5")
         self.supabase_url: str | None = os.getenv("SUPABASE_URL") or None
         self.supabase_service_key: str | None = os.getenv("SUPABASE_SERVICE_KEY") or None
         self.supabase_bucket: str = os.getenv("SUPABASE_BUCKET", "submissions")
@@ -33,7 +33,7 @@ class Settings:
             o.strip() for o in os.getenv("CORS_ORIGINS", "http://localhost:5173,http://127.0.0.1:5173").split(",") if o.strip()
         ]
         self.signing_secret: str = os.getenv("IMAGE_SIGNING_SECRET", "local-dev-only-secret")
-        self.teacher_email: str = os.getenv("DEMO_TEACHER_EMAIL", "reyes@school.edu.ph")
+        self.teacher_email: str = os.getenv("DEMO_TEACHER_EMAIL", "areyes@university.edu.ph")
         self.teacher_password: str = os.getenv("DEMO_TEACHER_PASSWORD", "tsekmate")
         self.demo_cache_dir: Path = ROOT / "samples" / "cache"
 

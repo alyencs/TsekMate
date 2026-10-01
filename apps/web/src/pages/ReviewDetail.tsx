@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
-import { ArrowLeft, ArrowRight, Check, ChevronDown, ChevronRight, CircleAlert, FlagTriangleRight, ImageOff, MessageSquareText, RotateCcw, Sparkles, UserRound, ZoomIn, ZoomOut } from 'lucide-react'
+import { ArrowLeft, ArrowRight, Check, ChevronDown, ChevronRight, CircleAlert, FlagTriangleRight, ImageOff, MessageSquareText, RefreshCw, RotateCcw, Sparkles, UserRound, UserRoundX, ZoomIn, ZoomOut } from 'lucide-react'
 import { api } from '../lib/api'
 import type { Criterion, ProblemResult, SubmissionDetail, Unit, UnitEdit, Verdict } from '../lib/types'
 import { AI_LABEL, SUBJECTS, errorTypeLabel } from '../lib/subjects'
@@ -10,7 +10,8 @@ import { AppShell } from '../components/layout/AppShell'
 import { Badge, SubjectChip } from '../components/ui/Chip'
 import { ConfidenceBar } from '../components/ui/ConfidenceBar'
 import { Button } from '../components/ui/Button'
-import { Initials } from '../components/ui/Logo'
+import { TopBarActions } from '../components/layout/AppShell'
+import { StudentLabel } from '../components/ui/StudentLabel'
 import { Modal } from '../components/ui/Modal'
 import { ErrorState, Loading } from '../components/ui/States'
 
@@ -141,6 +142,32 @@ export default function ReviewDetail() {
   }
 
   const back = () => navigate(`/queue?activity=${detail?.activity.id ?? ''}`)
+  const [regrading, setRegrading] = useState(false)
+
+  async function gradeAgain() {
+    if (!detail) return
+    setRegrading(true)
+    setNotice(null)
+    try {
+      await api.regrade(detail.id)
+      navigate(`/activities/${detail.activity.id}/grading?return=${detail.id}`)
+    } catch (e) {
+      setNotice({ tone: 'bad', text: (e as Error).message })
+      setRegrading(false)
+    }
+  }
+
+  async function assign(studentId: string) {
+    if (!detail) return
+    setNotice(null)
+    try {
+      const d = await api.assignStudent(detail.id, studentId)
+      setDetail(d)
+      setNotice({ tone: 'ok', text: `Paper assigned to ${d.student_name} (${d.student_id}).` })
+    } catch (e) {
+      setNotice({ tone: 'bad', text: (e as Error).message })
+    }
+  }
 
   if (error) return <AppShell active="queue"><ErrorState message={error} /></AppShell>
   if (!detail || !prob) return <AppShell active="queue"><Loading label="Loading paper…" /></AppShell>
@@ -158,7 +185,9 @@ export default function ReviewDetail() {
           <button onClick={back} className="flex h-10 w-10 items-center justify-center rounded-ctl border border-line hover:bg-gray-50" aria-label="Back to review queue">
             <ArrowLeft className="h-5 w-5" />
           </button>
-          <h1 className="text-[19px] font-bold">{detail.student_id}</h1>
+          <h1>
+            <StudentLabel id={detail.student_id} name={detail.student_name} size="lg" inline />
+          </h1>
           <span className="h-5 w-px bg-line" aria-hidden />
           <nav aria-label={`${cfg.problemNoun}s`} className="flex gap-1.5">
             {detail.activity.problems.map((p) => {
@@ -197,19 +226,20 @@ export default function ReviewDetail() {
             </>
           )}
           <span className="rounded border border-line bg-gray-50 px-2 py-1 text-[11px] text-muted">{AI_LABEL}</span>
-          <Initials />
+          <TopBarActions />
         </>
       }
     >
       <div className="grid grid-cols-[minmax(0,496px)_minmax(0,1fr)] gap-8">
         <div className="sticky top-[96px] self-start">
-          <ImageViewer url={detail.image_url} deleted={detail.image_deleted} units={units} studentId={detail.student_id} />
+          <ImageViewer url={detail.image_url} deleted={detail.image_deleted} units={units} studentId={detail.student_name ?? detail.student_id ?? 'an unidentified student'} />
           <p className="mt-6 text-center text-[11px] uppercase tracking-[0.12em] text-muted">
             Student submission: {shortTitle}, {label}
           </p>
         </div>
 
         <div className="flex min-w-0 flex-col gap-4">
+          <IdentityBar detail={detail} onAssign={assign} />
           <section className="card px-6 py-6">
             {subject === 'grammar' ? (
               <>
@@ -239,7 +269,10 @@ export default function ReviewDetail() {
               <div>
                 <p className="font-semibold">TsekMate could not grade this paper automatically.</p>
                 {detail.ai_result?.failure_reason && <p className="mt-1 text-[14px]">Reason: {detail.ai_result.failure_reason}</p>}
-                <p className="mt-1 text-[14px]">Please grade it by hand: enter the score for each {cfg.problemNoun.toLowerCase()} below and approve. You can also delete it on the upload page and upload a clearer photo.</p>
+                <p className="mt-1 text-[14px]">Try grading it again with the current rubric, or grade it by hand: enter the score for each {cfg.problemNoun.toLowerCase()} below and approve.</p>
+                <Button className="mt-4" icon={<RefreshCw className="h-4 w-4" aria-hidden />} onClick={gradeAgain} loading={regrading}>
+                  Grade again
+                </Button>
               </div>
             </div>
           ) : (
@@ -321,7 +354,7 @@ export default function ReviewDetail() {
               </p>
             )}
             <div className="flex items-center gap-4">
-              <Button size="lg" className="flex-1 shadow-md" onClick={approve} loading={saving === 'approve'} disabled={saving !== null}>
+              <Button size="lg" className="flex-1 shadow-md" onClick={approve} loading={saving === 'approve'} disabled={saving !== null || !detail.student_id} title={detail.student_id ? undefined : 'Choose the student first'}>
                 {isApproved ? 'Save and re-approve' : 'Approve and save'}
               </Button>
               <Button size="lg" variant="secondary" className="w-36" onClick={saveDraft} loading={saving === 'draft'} disabled={saving !== null || !dirty}>
@@ -336,14 +369,16 @@ export default function ReviewDetail() {
                 <FlagTriangleRight className="h-5 w-5" />
               </button>
             </div>
-            <p className="mt-3 text-[12px] text-muted">Approving saves all {detail.activity.problems.length} {cfg.problemsNoun} of this paper to the gradebook.</p>
+            <p className="mt-3 text-[12px] text-muted">
+              {detail.student_id ? `Approving saves all ${detail.activity.problems.length} ${cfg.problemsNoun} of this paper to the gradebook.` : 'Choose the student above before approving.'}
+            </p>
             <ReviewRecord detail={detail} />
           </section>
         </div>
       </div>
 
       <Modal open={!!approved} onClose={back} labelledBy="approved-title" className="w-[500px] px-12 pb-10 pt-12 text-center">
-        <span className="mx-auto flex h-24 w-24 items-center justify-center rounded-full bg-ok-bg" aria-hidden>
+        <span className="animate-check mx-auto flex h-24 w-24 items-center justify-center rounded-full bg-ok-bg" aria-hidden>
           <span className="flex h-20 w-20 items-center justify-center rounded-full bg-[#16A34A]">
             <span className="flex h-7 w-7 items-center justify-center rounded-full bg-white">
               <Check className="h-4 w-4 text-[#16A34A]" strokeWidth={3} />
@@ -355,7 +390,7 @@ export default function ReviewDetail() {
         </h2>
         <div className="mt-5 rounded-card border border-line bg-[#F9F7F5] px-6 py-6">
           <p className="text-[18px] leading-relaxed">
-            <b>{detail.student_id}</b> scored{' '}
+            <b>{detail.student_name ?? detail.student_id}</b> scored{' '}
             <b className="text-[#16A34A]">
               {fmtScore(approved?.total)} / {fmtScore(approved?.max)}
             </b>{' '}
@@ -365,7 +400,7 @@ export default function ReviewDetail() {
         </div>
         {detail.next_submission && (
           <Button size="lg" className="mt-8 w-full" iconRight={<ArrowRight className="h-4 w-4" aria-hidden />} onClick={() => navigate(`/submissions/${detail.next_submission!.id}`)}>
-            Next paper ({detail.next_submission.student_id})
+            Next paper ({detail.next_submission.student_name ?? 'not identified'})
           </Button>
         )}
         <Button size="lg" variant="secondary" className={`${detail.next_submission ? 'mt-3' : 'mt-8'} w-full`} onClick={back}>
@@ -626,5 +661,72 @@ function ReviewRecord({ detail }: { detail: SubmissionDetail }) {
         </div>
       )}
     </div>
+  )
+}
+
+// ---------------------------------------------------------------- student identity
+function IdentityBar({ detail, onAssign }: { detail: SubmissionDetail; onAssign: (studentId: string) => void }) {
+  const id = detail.identity ?? {}
+  const [changing, setChanging] = useState(!detail.student_id)
+  const [choice, setChoice] = useState(id.suggested_student_id ?? '')
+  useEffect(() => {
+    setChanging(!detail.student_id)
+    setChoice(detail.identity?.suggested_student_id ?? '')
+  }, [detail.id, detail.student_id, detail.identity?.suggested_student_id])
+  const read = [id.extracted_name, id.extracted_id].filter(Boolean).join(', ')
+  const conf = id.identity_confidence ? ` · ${Math.round(id.identity_confidence * 100)}% identity confidence` : ''
+  const how = id.method === 'id' ? 'Matched by student ID' : id.method === 'name' ? 'Matched by name' : id.method === 'teacher' ? 'Assigned by you' : id.method === 'teacher_upload' ? 'Chosen at upload' : null
+  const approved = detail.status === 'approved'
+
+  if (!changing && detail.student_id)
+    return (
+      <p className="flex flex-wrap items-center gap-x-2 px-1 text-[13px] text-muted">
+        <UserRound className="h-3.5 w-3.5" aria-hidden />
+        {how ?? 'Student'}
+        {read && <span>· paper says &quot;{read}&quot;</span>}
+        <span>{conf}</span>
+        {!approved && (
+          <button className="ml-1 font-semibold text-brand-dark hover:underline" onClick={() => setChanging(true)}>
+            Change student
+          </button>
+        )}
+      </p>
+    )
+  const options = detail.roster.filter((r) => !r.has_paper)
+  return (
+    <section className="animate-fade card border-warn-border bg-warn-bg/40 px-5 py-4" aria-label="Student identity">
+      <div className="flex items-start gap-3">
+        <UserRoundX className="mt-0.5 h-5 w-5 shrink-0 text-warn-text" aria-hidden />
+        <div className="min-w-0 flex-1">
+          <p className="text-[15px] font-semibold text-warn-text">{detail.student_id ? 'Change the student for this paper' : 'Student: Not identified'}</p>
+          <p className="mt-0.5 text-[13px] text-gray-700">
+            {id.reason ?? 'TsekMate could not match this paper to the class roster.'} {read && `The paper says "${read}".`} Grading is not affected.
+          </p>
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <label className="sr-only" htmlFor="assign-student">
+              Student
+            </label>
+            <select id="assign-student" className="field h-9 w-auto min-w-[260px] text-[14px]" value={choice} onChange={(e) => setChoice(e.target.value)}>
+              <option value="">Choose a student from {detail.activity.class_name}…</option>
+              {options.map((r) => (
+                <option key={r.id} value={r.id}>
+                  {r.name} · {r.id}
+                  {r.id === id.suggested_student_id ? ' (suggested)' : ''}
+                </option>
+              ))}
+            </select>
+            <Button size="sm" className="h-9" disabled={!choice} onClick={() => onAssign(choice)}>
+              Assign
+            </Button>
+            {detail.student_id && (
+              <Button size="sm" variant="ghost" className="h-9" onClick={() => setChanging(false)}>
+                Cancel
+              </Button>
+            )}
+          </div>
+          {options.length === 0 && <p className="mt-2 text-[12px] text-muted">Every student on the roster already has a paper. Delete or reassign a paper first.</p>}
+        </div>
+      </div>
+    </section>
   )
 }

@@ -12,7 +12,7 @@ import random
 import _path  # noqa: F401
 from _path import ROOT
 from app.seed_data import GRAMMAR, MATH, SCIENCE
-from app.seed import _apply_variant, _base_units, _wrap
+from app.seed import NAMES, _apply_variant, _base_units, _wrap
 from app.services.paper import render_paper
 
 OUT = ROOT / "samples" / "synthetic"
@@ -51,9 +51,12 @@ def main() -> None:
                     }
                 )
             name = f"{spec['key']}-synthetic-{k + 1:02d}"
-            img, _ = render_paper(spec["title"].split(":")[0], blocks, seed=100 + n, line_font=44 if spec["subject"] == "grammar" else 50)
+            sid = ["2026-002", "2026-009", "2026-019"][k % 3]  # students whose seeded papers are not approved yet (retake demo)
+            header = f"Name: {NAMES[sid]}    ID: {sid}" if k != 3 else "Name:            ID:"  # every 4th paper has no name
+            img, _ = render_paper(header, blocks, seed=100 + n, line_font=44 if spec["subject"] == "grammar" else 50)
             (OUT / f"{name}.jpg").write_bytes(img)
-            gt = {"activity_id": spec["id"], "writer": "font:Caveat", "style": "synthetic", "synthetic": True, "problems": gt_problems}
+            gt = {"activity_id": spec["id"], "writer": "font:Caveat", "style": "synthetic", "synthetic": True,
+                  "student_name": NAMES[sid] if k != 3 else None, "student_id": sid if k != 3 else None, "problems": gt_problems}
             (OUT / f"{name}.json").write_text(json.dumps(gt, indent=2, ensure_ascii=False))
             n += 1
     print(f"Wrote {n} synthetic papers to {OUT} (smoke tests only, not for the evaluation report).")

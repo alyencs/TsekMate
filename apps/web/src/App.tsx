@@ -12,6 +12,8 @@ import ClassSummary from './pages/ClassSummary'
 import Gradebook from './pages/Gradebook'
 import ParentUpdate from './pages/ParentUpdate'
 import StudentFeedback from './pages/StudentFeedback'
+import Profile from './pages/Profile'
+import Settings from './pages/Settings'
 import { getTeacher } from './lib/session'
 
 function RequireTeacher({ children }: { children: ReactNode }) {
@@ -38,6 +40,8 @@ export default function App() {
       <Route path="/gradebook" element={guard(<Gradebook />)} />
       {/* Student view is a teacher-side preview in the prototype (no student logins yet). */}
       <Route path="/feedback/:id" element={guard(<StudentFeedback />)} />
+      <Route path="/profile" element={guard(<Profile />)} />
+      <Route path="/settings" element={guard(<Settings />)} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   )

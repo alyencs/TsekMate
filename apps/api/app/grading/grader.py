@@ -13,7 +13,7 @@ from ..models import ERROR_TYPES, PaperOut
 from . import llm
 from .scoring import clean_problem, paper_confidence, paper_flags, route
 
-PROMPT_VERSION = "v1.0"
+PROMPT_VERSION = "v1.1"  # v1.1 adds student identity (name, ID) to the same single call
 PROMPT_FILE = API_DIR / "prompts" / f"grade_{PROMPT_VERSION}.txt"
 
 NOUNS = {
@@ -126,10 +126,10 @@ def grade_image(data: bytes, media_type: str, activity: dict, problems: list[dic
             reply = llm.call(messages)
             raw = llm.extract_json(reply)
             _validate(raw, activity, problems, rubric)
-            result = _finish(raw, activity, problems, rubric, s.gemini_model, started)
+            result = _finish(raw, activity, problems, rubric, s.anthropic_model, started)
             if s.demo_mode:
                 s.demo_cache_dir.mkdir(parents=True, exist_ok=True)
-                _cache_path(h).write_text(json.dumps({"model": s.gemini_model, "raw_json": raw}, indent=1))
+                _cache_path(h).write_text(json.dumps({"model": s.anthropic_model, "raw_json": raw}, indent=1))
             return result
         except llm.LLMUnavailable:
             raise
@@ -143,7 +143,7 @@ def grade_image(data: bytes, media_type: str, activity: dict, problems: list[dic
                         "content": f"Your reply did not pass validation:\n{last_error}\nReturn the corrected JSON object only.",
                     },
                 ]
-    return failed_result(activity, problems, rubric, s.gemini_model, started, last_error, reply)
+    return failed_result(activity, problems, rubric, s.anthropic_model, started, last_error, reply)
 
 
 def _finish(raw: dict, activity: dict, problems: list[dict], rubric: list[dict], model: str, started: str, cached: bool = False) -> dict:
@@ -160,6 +160,7 @@ def _finish(raw: dict, activity: dict, problems: list[dict], rubric: list[dict],
         "prompt_version": PROMPT_VERSION,
         "raw_json": raw,
         "created_at": started,
+        "identity": out.identity(),  # separate from grading confidence; never affects scores or routing
         "status": route(cleaned),
     }
 
@@ -189,6 +190,7 @@ def failed_result(activity: dict, problems: list[dict], rubric: list[dict], mode
         "model": model,
         "prompt_version": PROMPT_VERSION,
         "raw_json": {"error": error, "reply": reply[:4000]},
+        "identity": {"student_name": None, "student_id": None, "identity_confidence": 0.0},
         "created_at": started,
         "status": "failed",
     }

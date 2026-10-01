@@ -38,11 +38,3 @@ export function Avatar({ size = 32 }: { size?: number }) {
     </svg>
   )
 }
-
-export function Initials({ text = 'MR' }: { text?: string }) {
-  return (
-    <span className="flex h-8 w-8 items-center justify-center rounded-full bg-brand-light text-[12px] font-bold text-brand-dark" aria-label="Ms. Reyes">
-      {text}
-    </span>
-  )
-}

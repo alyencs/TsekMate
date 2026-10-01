@@ -7,7 +7,6 @@ import os
 from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
-from ..config import get_settings
 from ..grading.flags import error_label
 from ..grading.scoring import apply_edits, focus_problem, paper_confidence, queue_chips
 from ..models import ERROR_TYPES, ActivityIn
@@ -88,7 +87,22 @@ class Bundle:
         return round(sum(self.problem_finals(sub_id).values()), 2)
 
     def students(self) -> list[str]:
-        return sorted(s["id"] for s in self.store.select("students", section=self.activity["class_name"]))
+        return [s["id"] for s in self.roster()]
+
+    def roster(self) -> list[dict]:
+        """Enrolled students: everyone whose section equals the activity's class."""
+        if not hasattr(self, "_roster"):
+            rows = self.store.select("students", section=self.activity["class_name"])
+            self._roster = sorted(({"id": r["id"], "name": r.get("name") or ""} for r in rows), key=lambda r: r["id"])
+        return self._roster
+
+    def student_name(self, student_id: str | None) -> str | None:
+        if not student_id:
+            return None
+        return next((r["name"] for r in self.roster() if r["id"] == student_id), None) or None
+
+    def taken(self) -> dict[str, str]:
+        return {s["student_id"]: s["id"] for s in self.subs if s.get("student_id")}
 
     def problem_label(self, problem_id: str) -> str:
         p = next((p for p in self.problems if p["id"] == problem_id), None)
@@ -100,6 +114,8 @@ class Bundle:
 def activity_summary(b: Bundle) -> dict:
     a = b.activity
     st = [s["status"] for s in b.subs]
+    roster = b.roster()
+    taken = b.taken()
     return {
         "id": a["id"],
         "title": a["title"],
@@ -111,6 +127,9 @@ def activity_summary(b: Bundle) -> dict:
         "to_review": sum(1 for x in st if x in ("needs_review", "ready", "failed")),
         "flagged": sum(1 for x in st if x in ("needs_review", "failed")),
         "approved": sum(1 for x in st if x == "approved"),
+        "roster_size": len(roster),
+        "not_submitted": sum(1 for r in roster if r["id"] not in taken),
+        "unidentified": sum(1 for x in b.subs if not x.get("student_id")),
         "updated_at": a["updated_at"],
     }
 
@@ -232,11 +251,12 @@ def class_average(b: Bundle) -> tuple[float, float]:
 def list_uploads(store: Store, activity_id: str) -> list[dict]:
     b = Bundle(store, activity_id)
     out = []
-    for s in sorted(b.subs, key=lambda s: s["student_id"]):
+    for s in sorted(b.subs, key=lambda s: (s.get("student_id") is None, s.get("student_id") or "", s["created_at"])):
         out.append(
             {
                 "id": s["id"],
-                "student_id": s["student_id"],
+                "student_id": s.get("student_id"),
+                "student_name": b.student_name(s.get("student_id")),
                 "status": s["status"],
                 "image_url": store.signed_url(s["image_path"]) if s.get("image_path") else None,
                 "quality": s.get("quality"),
@@ -249,8 +269,9 @@ def add_uploads(store: Store, activity_id: str, files: list[tuple[str, bytes, st
     from .quality import check
 
     b = Bundle(store, activity_id)
-    taken = {s["student_id"] for s in b.subs}
+    taken = set(b.taken())
     roster = b.students()
+    ids: list[str | None]
     if student_ids:
         bad = [s for s in student_ids if s not in roster]
         if bad:
@@ -258,15 +279,10 @@ def add_uploads(store: Store, activity_id: str, files: list[tuple[str, bytes, st
         dup = [s for s in student_ids if s in taken]
         if dup:
             raise Conflict(f"{', '.join(dup)} already has a paper for this activity. Delete it first to upload a retake.")
-        ids = student_ids
+        ids = list(student_ids)
     else:
-        free = [s for s in roster if s not in taken]
-        if len(free) < len(files):
-            raise Conflict(
-                f"Only {len(free)} student ID(s) are free in {b.activity['class_name']}. Delete a paper (for example one marked "
-                "'Retake suggested') before uploading more."
-            )
-        ids = free[: len(files)]
+        # Papers start unidentified; the grading call reads the name / ID on the paper and matches the roster.
+        ids = [None] * len(files)
     created = []
     for (name, data, ctype), sid in zip(files, ids):
         sub_id = f"sub-{new_id()[:12]}"
@@ -279,6 +295,7 @@ def add_uploads(store: Store, activity_id: str, files: list[tuple[str, bytes, st
             "id": sub_id,
             "activity_id": activity_id,
             "student_id": sid,
+            "identity": {"status": "manual", "method": "teacher_upload"} if sid else {"status": "pending"},
             "image_path": path,
             "image_hash": hashlib.sha256(data).hexdigest(),
             "status": "uploaded",
@@ -287,8 +304,14 @@ def add_uploads(store: Store, activity_id: str, files: list[tuple[str, bytes, st
             "updated_at": ts,
         }
         store.insert("submissions", row)
-        created.append({"id": sub_id, "student_id": sid, "status": "uploaded", "image_url": store.signed_url(path), "quality": q})
+        created.append({"id": sub_id, "student_id": sid, "student_name": b.student_name(sid), "status": "uploaded", "image_url": store.signed_url(path), "quality": q})
     touch(store, activity_id)
+    from . import notifications
+
+    notifications.add(
+        store, "upload_done", f"{len(created)} paper{'s' if len(created) != 1 else ''} uploaded",
+        f"{b.activity['title']}. Ready to grade.", link=f"/activities/{activity_id}/upload", activity_id=activity_id,
+    )
     return created
 
 
@@ -320,7 +343,7 @@ def queue(store: Store, activity_id: str, tab: str) -> dict:
         if s["status"] not in tabs[tab]:
             continue
         rows.append(queue_row(b, s))
-    rows.sort(key=lambda r: (r["confidence"] if r["confidence"] is not None else -1, r["student_id"]))
+    rows.sort(key=lambda r: (r["confidence"] if r["confidence"] is not None else -1, r["student_id"] or "~"))
     return {"activity": activity_summary(b), "counts": counts, "rows": rows}
 
 
@@ -331,10 +354,13 @@ def queue_row(b: Bundle, s: dict) -> dict:
     chips = queue_chips(probs, error_label) if probs else []
     if s.get("quality") and not s["quality"].get("ok") and "Retake suggested" not in chips:
         chips.append("Retake suggested")
+    if not s.get("student_id") and s["status"] in GRADED:
+        chips.insert(0, "Student not identified")
     pos = next((p["position"] for p in b.problems if focus and p["id"] == focus["problem_id"]), None)
     return {
         "submission_id": s["id"],
-        "student_id": s["student_id"],
+        "student_id": s.get("student_id"),
+        "student_name": b.student_name(s.get("student_id")),
         "status": s["status"],
         "focus_problem_id": focus["problem_id"] if focus else None,
         "focus_problem_order": pos,
@@ -349,8 +375,8 @@ def next_in_queue(b: Bundle, after_sub_id: str) -> dict | None:
     pending = [s for s in b.subs if s["status"] in ("needs_review", "failed", "ready") and s["id"] != after_sub_id]
     if not pending:
         return None
-    rows = sorted((queue_row(b, s) for s in pending), key=lambda r: (r["status"] == "ready", r["confidence"] or 0, r["student_id"]))
-    return {"id": rows[0]["submission_id"], "student_id": rows[0]["student_id"]}
+    rows = sorted((queue_row(b, s) for s in pending), key=lambda r: (r["status"] == "ready", r["confidence"] or 0, r["student_id"] or "~"))
+    return {"id": rows[0]["submission_id"], "student_id": rows[0]["student_id"], "student_name": rows[0]["student_name"]}
 
 
 # ---------------------------------------------------------------- submission detail / review / approve
@@ -399,7 +425,10 @@ def submission_detail(store: Store, sub_id: str) -> dict:
     focus = focus_problem(probs) if probs else None
     return {
         "id": s["id"],
-        "student_id": s["student_id"],
+        "student_id": s.get("student_id"),
+        "student_name": b.student_name(s.get("student_id")),
+        "identity": s.get("identity") or {},
+        "roster": [{**r, "has_paper": r["id"] in b.taken() and b.taken()[r["id"]] != s["id"]} for r in b.roster()],
         "status": s["status"],
         "image_url": store.signed_url(s["image_path"]) if s.get("image_path") else None,
         "image_deleted": not s.get("image_path"),
@@ -501,6 +530,8 @@ def approve(store: Store, sub_id: str) -> dict:
     b = Bundle(store, s["activity_id"])
     if sub_id not in b.ai:
         raise Conflict("This paper has not been graded yet.")
+    if not s.get("student_id"):
+        raise Conflict("Choose the student for this paper before approving (Student: Not identified).")
     r = _review_row(store, sub_id)
     b.reviews[sub_id] = r
     total = b.final_total(sub_id)
@@ -511,12 +542,64 @@ def approve(store: Store, sub_id: str) -> dict:
     log = list(r.get("edit_log") or []) + [{"at": ts, "field": "approved", "from": False, "to": True}]
     store.update("teacher_reviews", r["id"], {"approved": True, "approved_at": ts, "final_score": total, "feedback": feedback, "edit_log": log, "updated_at": ts})
     patch: dict = {"status": "approved", "updated_at": ts}
-    if get_settings().delete_images_on_approve and s.get("image_path"):
+    from . import settings as app_settings
+
+    if app_settings.get(store)["delete_images_on_approve"] and s.get("image_path"):
         store.delete_image(s["image_path"])
         patch["image_path"] = None
     store.update("submissions", sub_id, patch)
     touch(store, s["activity_id"])
     return {"submission": submission_detail(store, sub_id), "final_score": total, "max_score": float(b.activity["total_points"])}
+
+
+def assign_student(store: Store, sub_id: str, student_id: str) -> dict:
+    """Teacher associates a paper with a student on the class roster (for unidentified or mismatched papers)."""
+    s = store.get("submissions", sub_id)
+    if not s:
+        raise NotFound("Paper not found.")
+    b = Bundle(store, s["activity_id"])
+    student = next((r for r in b.roster() if r["id"] == student_id), None)
+    if not student:
+        raise Conflict(f"{student_id} is not on the roster of {b.activity['class_name']}.")
+    other = b.taken().get(student_id)
+    if other and other != sub_id:
+        raise Conflict(f"{student['name']} ({student_id}) already has a paper for this activity. Delete or reassign that paper first.")
+    if s["status"] == "approved" and s.get("student_id") != student_id:
+        raise Conflict("This paper is already approved. Its student cannot be changed here.")
+    ts = now_iso()
+    identity = {**(s.get("identity") or {}), "status": "matched", "method": "teacher", "previous_student_id": s.get("student_id"), "assigned_at": ts}
+    patch: dict = {"student_id": student_id, "identity": identity, "updated_at": ts}
+    if s["status"] == "needs_review" and sub_id in b.ai:
+        from ..grading.scoring import needs_teacher
+
+        if not needs_teacher(b.effective(sub_id)):
+            patch["status"] = "ready"  # it was only waiting for the student to be identified
+    store.update("submissions", sub_id, patch)
+    r = _review_row(store, sub_id)
+    store.update("teacher_reviews", r["id"], {"edit_log": list(r.get("edit_log") or []) + [{"at": ts, "field": "student_id", "from": s.get("student_id"), "to": student_id}], "updated_at": ts})
+    touch(store, s["activity_id"])
+    return submission_detail(store, sub_id)
+
+
+ROSTER_STATUS = {
+    "uploaded": "Submitted",
+    "grading": "Checking",
+    "failed": "Grading failed",
+    "needs_review": "Needs review",
+    "ready": "Ready to approve",
+    "approved": "Approved",
+}
+
+
+def roster_status(b: Bundle) -> list[dict]:
+    """One row per enrolled student: did they submit, and where is the paper in the workflow."""
+    by_student = {s["student_id"]: s for s in b.subs if s.get("student_id")}
+    out = []
+    for r in b.roster():
+        sub = by_student.get(r["id"])
+        out.append({"student_id": r["id"], "student_name": r["name"], "submission_id": sub["id"] if sub else None,
+                    "status": ROSTER_STATUS.get(sub["status"], sub["status"]) if sub else "Not submitted"})
+    return out
 
 
 # ---------------------------------------------------------------- class summary
@@ -529,7 +612,7 @@ def _error_units(b: Bundle) -> list[tuple[str, str, str, dict]]:
         for p in b.effective(s["id"]):
             for u in p["units"]:
                 if u.get("verdict") == "error" and u.get("error_type"):
-                    out.append((s["id"], s["student_id"], p["problem_id"], u))
+                    out.append((s["id"], s.get("student_id") or s["id"], p["problem_id"], u))
     return out
 
 
@@ -583,10 +666,16 @@ def class_summary(store: Store, activity_id: str) -> dict:
             probs = sorted({pid for _st, pid in members})
             clusters.append({"text": f"made {error_label(et).lower()} errors", "error_type": et, "count": len({st for st, _ in members}), "problems": [b.problem_label(pid) for pid in probs]})
     clusters.sort(key=lambda c: -c["count"])
+    rs = roster_status(b)
     return {
         "activity": activity_summary(b),
         "approved": len(approved),
         "students": len(roster) or len(b.subs),
+        "submissions": {
+            "submitted": sum(1 for r in rs if r["status"] != "Not submitted"),
+            "not_submitted": [r for r in rs if r["status"] == "Not submitted"],
+            "unidentified": sum(1 for x in b.subs if not x.get("student_id")),
+        },
         "average_score": round(avg) if avg else 0,
         "out_of": out_of,
         "most_missed_criterion": most,
@@ -601,9 +690,11 @@ def class_summary(store: Store, activity_id: str) -> dict:
 # ---------------------------------------------------------------- gradebook
 def gradebook(store: Store, activity_id: str) -> dict:
     b = Bundle(store, activity_id)
-    by_student = {s["student_id"]: s for s in b.subs}
+    by_student = {s["student_id"]: s for s in b.subs if s.get("student_id")}
     recent = datetime.now(timezone.utc) - timedelta(minutes=15)
     rows = []
+    status = {r["student_id"]: r["status"] for r in roster_status(b)}
+    names = {r["id"]: r["name"] for r in b.roster()}
     for st in b.students():
         s = by_student.get(st)
         if s and s["status"] == "approved":
@@ -614,10 +705,13 @@ def gradebook(store: Store, activity_id: str) -> dict:
             scores = [finals.get(p["id"]) for p in b.problems]
             edited = [p["id"] in overrides or any(k.startswith(p["id"] + ":") for k in edits) for p in b.problems]
             just = (d := _dt(rev.get("approved_at"))) is not None and d >= recent
-            rows.append({"student_id": st, "submission_id": s["id"], "scores": scores, "edited": edited, "total": round(sum(v or 0 for v in scores), 2), "just_approved": just})
+            rows.append({"student_id": st, "student_name": names[st], "status": status[st], "submission_id": s["id"], "scores": scores, "edited": edited, "total": round(sum(v or 0 for v in scores), 2), "just_approved": just})
         else:
-            rows.append({"student_id": st, "submission_id": s["id"] if s else None, "scores": [None] * len(b.problems), "edited": [False] * len(b.problems), "total": None, "just_approved": False})
+            rows.append({"student_id": st, "student_name": names[st], "status": status[st], "submission_id": s["id"] if s else None, "scores": [None] * len(b.problems), "edited": [False] * len(b.problems), "total": None, "just_approved": False})
     rows.sort(key=lambda r: (not r["just_approved"], r["student_id"]))
+    for s in b.subs:  # papers not matched to anyone yet
+        if not s.get("student_id"):
+            rows.append({"student_id": None, "student_name": None, "status": "Student not identified", "submission_id": s["id"], "scores": [None] * len(b.problems), "edited": [False] * len(b.problems), "total": None, "just_approved": False})
     return {"activity": activity_summary(b), "columns": [f"{PROBLEM_PREFIX[b.subject]}{p['position']}" for p in b.problems], "rows": rows}
 
 
@@ -625,7 +719,7 @@ def approved_grades(store: Store, activity_id: str) -> list[dict]:
     b = Bundle(store, activity_id)
     out = []
     for s in b.subs:
-        if s["status"] != "approved":
+        if s["status"] != "approved" or not s.get("student_id"):
             continue
         rev = b.reviews.get(s["id"]) or {}
         out.append({"student_ref": s["student_id"], "score": b.final_total(s["id"]), "max_score": float(b.activity["total_points"]), "approved_at": rev.get("approved_at")})

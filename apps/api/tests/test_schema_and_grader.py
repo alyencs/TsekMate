@@ -54,7 +54,7 @@ def test_malformed_bbox_is_dropped_not_fatal():
 @pytest.fixture
 def fake_llm(monkeypatch):
     s = get_settings()
-    monkeypatch.setattr(s, "gemini_api_key", "test-key")
+    monkeypatch.setattr(s, "anthropic_api_key", "test-key")
     monkeypatch.setattr(s, "demo_mode", False)
     replies: list[str] = []
     calls: list[list] = []

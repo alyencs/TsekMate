@@ -1,5 +1,10 @@
 import type {
   Activity,
+  AppSettings,
+  Notifications,
+  Profile,
+  RubricDraft,
+  RosterStatusRow,
   ActivityInput,
   ActivitySummary,
   ClassSummary,
@@ -85,6 +90,18 @@ export const api = {
   sendToSchool: (activityId: string) =>
     request<{ accepted: number; note: string }>('/adapter/grades/draft', json('POST', { activity_id: activityId })),
   parentMessage: (id: string) => request<ParentMessage>(`/api/submissions/${id}/parent-message`, { method: 'POST' }),
+  regrade: (id: string) => request<GradingProgress>(`/api/submissions/${id}/regrade`, { method: 'POST' }),
+  assignStudent: (id: string, studentId: string) => request<SubmissionDetail>(`/api/submissions/${id}/student`, json('PATCH', { student_id: studentId })),
+  roster: (activityId: string) => request<{ activity: ActivitySummary; students: RosterStatusRow[] }>(`/api/activities/${activityId}/roster`),
+  generateRubric: (body: { subject: string; title: string; problems: { text: string; expected_answer: string; rule: string }[]; learning_outcome: string; points_per_problem: number }) =>
+    request<RubricDraft>('/api/rubric/generate', json('POST', body)),
+  notifications: () => request<Notifications>('/api/notifications'),
+  readNotification: (id: string) => request<Notifications>(`/api/notifications/${id}/read`, { method: 'POST' }),
+  readAllNotifications: () => request<Notifications>('/api/notifications/read-all', { method: 'POST' }),
+  settings: () => request<AppSettings>('/api/settings'),
+  saveSettings: (patch: Partial<Omit<AppSettings, 'ai'>>) => request<AppSettings>('/api/settings', json('PATCH', patch)),
+  profile: () => request<Profile>('/api/profile'),
+  saveProfile: (patch: { name?: string; department?: string }) => request<Profile>('/api/profile', json('PATCH', patch)),
   approveParentMessage: (id: string, language: 'en' | 'fil', text: string) =>
     request<{ sent: boolean; note: string }>(`/api/submissions/${id}/parent-message/approve`, json('POST', { language, text })),
 }

@@ -1,10 +1,13 @@
 import { pct } from '../../lib/format'
+import { useThreshold } from '../../lib/appSettings'
 
-/** Green at or above 75 %, amber below (matches the mockup). Text label always shown. */
+/** Green at or above the confidence threshold (Settings, default 75 %), amber below. Text label always shown. */
 export function ConfidenceBar({ value, width = 'w-20' }: { value: number; width?: string }) {
-  const high = value >= 0.75
+  const threshold = useThreshold()
+  const high = value >= threshold
+  const t = Math.round(threshold * 100)
   return (
-    <span className="inline-flex items-center gap-2" title={high ? 'Confidence at or above 75%' : 'Low confidence, below 75%'}>
+    <span className="inline-flex items-center gap-2" title={high ? `Confidence at or above ${t}%` : `Low confidence, below ${t}%`}>
       <span
         className={`relative h-1.5 ${width} overflow-hidden rounded-full bg-gray-200`}
         role="meter"
@@ -14,7 +17,7 @@ export function ConfidenceBar({ value, width = 'w-20' }: { value: number; width?
         aria-label="AI confidence"
       >
         <span
-          className={`absolute inset-y-0 left-0 rounded-full ${high ? 'bg-ok-bar' : 'bg-warn-bar'}`}
+          className={`absolute inset-y-0 left-0 rounded-full transition-[width,background-color] duration-500 ${high ? 'bg-ok-bar' : 'bg-warn-bar'}`}
           style={{ width: `${Math.max(2, Math.min(100, value * 100))}%` }}
         />
       </span>

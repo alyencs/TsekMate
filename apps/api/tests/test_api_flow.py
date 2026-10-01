@@ -24,7 +24,7 @@ def test_seed_reproduces_mockup_numbers(client):
     assert d["queue_badge"] == 21
     q = client.get(f"/api/activities/{A}/queue?tab=needs_review").json()
     assert q["counts"] == {"needs_review": 9, "ready": 3, "approved": 26, "all": 38}
-    assert [r["student_id"] for r in q["rows"][:3]] == ["S-014", "S-002", "S-009"]
+    assert [r["student_id"] for r in q["rows"][:3]] == ["2026-014", "2026-002", "2026-009"]
     confs = [r["confidence"] for r in q["rows"]]
     assert confs == sorted(confs)
     s = client.get(f"/api/activities/{A}/class-summary").json()
@@ -34,7 +34,7 @@ def test_seed_reproduces_mockup_numbers(client):
 
 
 def test_review_edit_and_approve(client):
-    sid = "sub-math-S-014"
+    sid = "sub-math-2026-014"
     d = client.get(f"/api/submissions/{sid}").json()
     p2 = next(p for p in d["ai_result"]["problems"] if p["problem_id"].endswith("-p2"))
     assert p2["suggested_score"] == 5
@@ -46,29 +46,35 @@ def test_review_edit_and_approve(client):
     a = client.post(f"/api/submissions/{sid}/approve").json()
     assert a["submission"]["status"] == "approved"
     g = client.get(f"/api/activities/{A}/gradebook").json()
-    assert g["rows"][0]["student_id"] == "S-014" and g["rows"][0]["just_approved"]
+    assert g["rows"][0]["student_id"] == "2026-014" and g["rows"][0]["just_approved"]
     assert g["rows"][0]["scores"][1] == 6 and g["rows"][0]["edited"][1]
     assert client.delete(f"/api/submissions/{sid}").status_code == 409
 
 
-def test_upload_assigns_free_id_and_grading_without_key_fails_safely(client, monkeypatch):
+def test_upload_starts_unidentified_grading_without_key_fails_safely_and_teacher_assigns(client, monkeypatch):
     from app.config import get_settings
 
-    monkeypatch.setattr(get_settings(), "gemini_api_key", None)
+    monkeypatch.setattr(get_settings(), "anthropic_api_key", None)
     monkeypatch.setattr(get_settings(), "demo_mode", False)
-    assert client.delete("/api/submissions/sub-math-S-002").status_code == 204
+    assert client.delete("/api/submissions/sub-math-2026-002").status_code == 204
     buf = io.BytesIO()
     Image.new("RGB", (400, 500), "white").save(buf, format="PNG")
     r = client.post(f"/api/activities/{A}/submissions", files=[("files", ("p.png", buf.getvalue(), "image/png"))])
     assert r.status_code == 201
-    assert r.json()[0]["student_id"] == "S-002"
-    full = client.post(f"/api/activities/{A}/submissions", files=[("files", ("p.png", buf.getvalue(), "image/png"))])
-    assert full.status_code == 409
+    sid = r.json()[0]["id"]
+    assert r.json()[0]["student_id"] is None  # identified later from the paper, or by the teacher
     from app.services import jobs
     from app.store import get_store
 
-    res = jobs.grade_submission(get_store(), r.json()[0]["id"])
+    res = jobs.grade_submission(get_store(), sid)
     assert res["status"] == "failed" and res["flags"] == ["grading_failed"]
+    d = client.get(f"/api/submissions/{sid}").json()
+    assert d["student_id"] is None and "ANTHROPIC_API_KEY" in d["ai_result"]["failure_reason"]
+    assert client.post(f"/api/submissions/{sid}/approve").status_code == 409  # graded? no. and no student
+    taken = client.patch(f"/api/submissions/{sid}/student", json={"student_id": "2026-001"})
+    assert taken.status_code == 409  # 2026-001 already has a paper
+    ok = client.patch(f"/api/submissions/{sid}/student", json={"student_id": "2026-002"}).json()
+    assert ok["student_id"] == "2026-002" and ok["student_name"] == "Maria Santos" and ok["identity"]["method"] == "teacher"
 
 
 def test_unsupported_file_rejected(client):

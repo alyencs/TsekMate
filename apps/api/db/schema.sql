@@ -2,8 +2,9 @@
 -- Ids are text so the same rows work in the in-memory test store. No real names anywhere: students are pseudonymous.
 
 create table if not exists students (
-  id text primary key,                -- S-001 .. S-038
-  section text not null
+  id text primary key,                -- student number, e.g. 2026-014 (stable identifier)
+  name text not null default '',      -- fictional names in the demo seed
+  section text not null               -- class roster = students whose section equals activities.class_name
 );
 
 create table if not exists activities (
@@ -44,7 +45,8 @@ create table if not exists rubric_templates (
 create table if not exists submissions (
   id text primary key,
   activity_id text not null references activities(id) on delete cascade,
-  student_id text not null references students(id),
+  student_id text references students(id),  -- null until the paper is identified (AI) or assigned (teacher)
+  identity jsonb,                       -- {status, method, extracted_name, extracted_id, identity_confidence, ...}
   image_path text,                      -- path in the private bucket; null after deletion
   image_hash text,
   status text not null check (status in ('uploaded', 'grading', 'needs_review', 'ready', 'approved', 'failed')),
@@ -65,6 +67,7 @@ create table if not exists ai_results (
   model text not null,
   prompt_version text not null,
   raw_json jsonb,
+  identity jsonb,                       -- name / ID read from the paper; separate from grading confidence
   created_at timestamptz not null default now()
 );
 create index if not exists ai_results_submission on ai_results(submission_id);
@@ -105,6 +108,24 @@ create table if not exists parent_messages (
   created_at timestamptz not null default now()
 );
 
+create table if not exists notifications (
+  id text primary key,
+  kind text not null,                   -- grading_done, needs_review, grading_failed, regrade_ok, upload_done
+  title text not null,
+  body text not null default '',
+  link text,                            -- in-app route to open
+  activity_id text references activities(id) on delete cascade,
+  submission_id text,
+  read boolean not null default false,
+  created_at timestamptz not null default now()
+);
+
+create table if not exists app_settings (
+  id text primary key,                  -- 'settings' | 'profile'
+  value jsonb not null,
+  updated_at timestamptz not null default now()
+);
+
 -- The API uses the service key server-side. Enable RLS with no policies so the anon key cannot read anything.
 alter table students enable row level security;
 alter table activities enable row level security;
@@ -116,6 +137,8 @@ alter table ai_results enable row level security;
 alter table teacher_reviews enable row level security;
 alter table class_summaries enable row level security;
 alter table parent_messages enable row level security;
+alter table notifications enable row level security;
+alter table app_settings enable row level security;
 
 -- Private bucket for student work images (signed URLs only).
 insert into storage.buckets (id, name, public) values ('submissions', 'submissions', false)

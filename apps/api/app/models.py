@@ -92,7 +92,31 @@ class ProblemOut(BaseModel):
 
 
 class PaperOut(BaseModel):
+    # Student identity read from the paper. Lenient on purpose: identity problems never fail grading.
+    student_name: str | None = None
+    student_id: str | None = None
+    identity_confidence: float = 0.0
     problems: list[ProblemOut]
+
+    @field_validator("student_name", "student_id", mode="before")
+    @classmethod
+    def _identity_text(cls, v: object) -> str | None:
+        if v is None or not isinstance(v, (str, int)):
+            return None
+        v = " ".join(str(v).split())[:120]
+        return v if v and v.lower() not in {"null", "none", "unknown", "n/a", "not found"} else None
+
+    @field_validator("identity_confidence", mode="before")
+    @classmethod
+    def _identity_conf(cls, v: object) -> float:
+        try:
+            return min(max(float(v), 0.0), 1.0)  # type: ignore[arg-type]
+        except (TypeError, ValueError):
+            return 0.0
+
+    def identity(self) -> dict:
+        conf = self.identity_confidence if (self.student_name or self.student_id) else 0.0
+        return {"student_name": self.student_name, "student_id": self.student_id, "identity_confidence": round(conf, 2)}
 
     def check_against(self, subject: str, problem_ids: list[str], criteria: list[str]) -> None:
         """Extra validation that needs the activity context. Raises ValueError with a readable message."""
@@ -126,6 +150,37 @@ class ReviewPatch(BaseModel):
         if self.unit_edits is None and self.problem_scores is None and self.feedback is None:
             raise ValueError("Nothing to update")
         return self
+
+
+class AssignStudent(BaseModel):
+    student_id: str = Field(min_length=1)
+
+
+class RubricProblem(BaseModel):
+    text: str = ""
+    expected_answer: str = ""
+    rule: str = ""
+
+
+class RubricRequest(BaseModel):
+    subject: Subject
+    title: str = ""
+    problems: list[RubricProblem] = []
+    learning_outcome: str = ""
+    points_per_problem: float = Field(default=10, gt=0, le=100)
+
+
+class ProfilePatch(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=80)
+    department: str | None = Field(default=None, max_length=120)
+
+
+class SettingsPatch(BaseModel):
+    confidence_threshold: float | None = Field(default=None, ge=0.5, le=0.95)
+    default_feedback_style: Literal["hint_only", "full_solution"] | None = None
+    default_accept_alternate: bool | None = None
+    default_rubric_mode: Literal["manual", "ai"] | None = None
+    delete_images_on_approve: bool | None = None
 
 
 class SignIn(BaseModel):

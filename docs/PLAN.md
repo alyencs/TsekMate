@@ -151,7 +151,7 @@ approved; S-014, S-022, S-031 exactly as in the review detail frames; class summ
 
 ## 6. Needed from the team
 
-- `GEMINI_API_KEY` (checkpoint (a) and live grading are blocked without it).
+- `ANTHROPIC_API_KEY` (checkpoint (a) and live grading are blocked without it).
 - A Supabase project (`SUPABASE_URL`, `SUPABASE_SERVICE_KEY`); until then the app runs on `MemoryStore`.
 - The handwritten sample photos and ground truth in `samples/`.
 
@@ -179,3 +179,29 @@ The team switched the AI provider to Google Gemini so development and testing ca
 `google-genai` (`gemini-2.5-flash` by default, JSON output mode, inline image bytes). Prompts, Pydantic validation, the
 retry-once rule, score recompute, routing, API endpoints, database, and UI are unchanged. Env var: `GEMINI_API_KEY`
 (replaces `ANTHROPIC_API_KEY`). The optional "Gemini comparison" stretch item no longer applies.
+
+## 9. Provider back to Anthropic Claude (Claude Haiku) and feature round 2
+
+**Provider.** The live AI provider is Anthropic Claude again, model `claude-haiku-4-5` (Claude Haiku 4.5), through the
+official `anthropic` Python SDK, configured with `ANTHROPIC_API_KEY` and `ANTHROPIC_MODEL`. Section 8 is kept as history:
+the Gemini integration was built and only tested with invalid keys; no live Gemini grading was run. The grading
+architecture is unchanged (one vision call per paper, JSON, Pydantic, retry once, code recompute, routing, review).
+
+**Features.** Grade again (`POST /api/submissions/{id}/regrade`); optional AI rubric draft (`POST /api/rubric/generate`,
+prompt `rubric_v1.0.txt`, points normalized in code, never auto-applied); notifications from real events; profile and
+settings pages (settings persisted in `app_settings`; reduce motion stored locally); class roster with names; identity
+reading added to the single grading call (prompt `grade_v1.1.txt`), conservative roster matching
+(`app/services/roster.py`), manual assignment (`PATCH /api/submissions/{id}/student`), Not submitted / Not identified
+tracking; college sample data; lighter layout and subtle animations.
+
+**Decisions.**
+- Uploads no longer take the "next free" student ID. Papers start unidentified and get their student from the name/ID
+  on the paper after grading (or from the teacher). An unidentified paper is still graded in full but routed to Needs
+  review, and approval requires a student.
+- Identity confidence is separate from grading confidence. Auto-match needs identity confidence >= 0.5 and either an
+  exact roster ID or a clear name match (similarity >= 0.86, clearly ahead of the next name); conflicts and duplicates
+  stay unidentified with a suggested student.
+- Seed: roster of 40 (BS Computer Science 2A) with 38 papers per activity; 2026-039 and 2026-040 did not submit; the
+  Math paper of 2026-036 has no readable name, to demo "Not identified" and assignment. Queue counts (9 / 3 / 26) and the
+  dashboard numbers stay as before. Misconception counts now read "14 of 40" because the roster has 40 students.
+- Migration `apps/api/db/migrations/002_roster_identity_notifications_settings.sql` (additive, idempotent).

@@ -4,18 +4,49 @@
   "style": "neat",
   "synthetic": false,
   "consent": "Consenting adult volunteer (team member). Written consent form on file.",
+  "student_name": "Juan Dela Cruz (fictional, or null if no name is written)",
+  "student_id": "2026-001 (or null)",
   "problems": [
     {
       "problem_id": "act-linear-eq-quiz1-p2",
-      "transcript": ["3(x - 4) = 2x + 5", "3x - 4 = 2x + 5", "x = 9", "Final answer: x = 9"],
+      "transcript": [
+        "3(x - 4) = 2x + 5",
+        "3x - 4 = 2x + 5",
+        "x = 9",
+        "Final answer: x = 9"
+      ],
       "units": [
-        {"criterion": "Setup", "verdict": "correct", "error_type": null, "points": 2},
-        {"criterion": "Method", "verdict": "error", "error_type": "conceptual", "points": 1},
-        {"criterion": "Computation", "verdict": "correct", "error_type": null, "points": 2},
-        {"criterion": "Final answer", "verdict": "error", "error_type": null, "points": 0}
+        {
+          "criterion": "Setup",
+          "verdict": "correct",
+          "error_type": null,
+          "points": 2
+        },
+        {
+          "criterion": "Method",
+          "verdict": "error",
+          "error_type": "conceptual",
+          "points": 1
+        },
+        {
+          "criterion": "Computation",
+          "verdict": "correct",
+          "error_type": null,
+          "points": 2
+        },
+        {
+          "criterion": "Final answer",
+          "verdict": "error",
+          "error_type": null,
+          "points": 0
+        }
       ],
       "planted_errors": [
-        {"criterion": "Method", "error_type": "conceptual", "note": "3 not multiplied by -4"}
+        {
+          "criterion": "Method",
+          "error_type": "conceptual",
+          "note": "3 not multiplied by -4"
+        }
       ]
     }
   ]

@@ -53,7 +53,7 @@ export default function ParentUpdate() {
         <TopBar
           title={
             <span className="flex items-center gap-3">
-              Parent update: {detail.data?.student_id ?? '…'} {detail.data && <SubjectChip subject={detail.data.activity.subject} size="sm" />}
+              Parent update: {detail.data ? detail.data.student_name ?? detail.data.student_id ?? 'Not identified' : '…'} {detail.data && <SubjectChip subject={detail.data.activity.subject} size="sm" />}
             </span>
           }
         />

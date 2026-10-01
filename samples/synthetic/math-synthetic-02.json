@@ -3,6 +3,8 @@
   "writer": "font:Caveat",
   "style": "synthetic",
   "synthetic": true,
+  "student_name": "Gabriel Torres",
+  "student_id": "2026-009",
   "problems": [
     {
       "problem_id": "act-linear-eq-quiz1-p1",

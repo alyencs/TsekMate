@@ -42,13 +42,13 @@ export function Modal({
   }, [open, onClose])
   if (!open) return null
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-500/60 p-4 backdrop-blur-[2px]" onMouseDown={onClose}>
+    <div className="animate-fade fixed inset-0 z-50 flex items-center justify-center bg-gray-500/60 p-4 backdrop-blur-[2px]" onMouseDown={onClose}>
       <div
         ref={ref}
         role="dialog"
         aria-modal="true"
         aria-labelledby={labelledBy}
-        className={`rounded-2xl bg-white shadow-pop ${className}`}
+        className={`animate-dialog rounded-2xl bg-white shadow-pop ${className}`}
         onMouseDown={(e) => e.stopPropagation()}
       >
         {children}

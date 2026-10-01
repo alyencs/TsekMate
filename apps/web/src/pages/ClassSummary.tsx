@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
-import { Lightbulb, Share } from 'lucide-react'
+import { Lightbulb, Share, UserRoundX } from 'lucide-react'
 import { api } from '../lib/api'
 import { AI_LABEL } from '../lib/subjects'
 import { useAsync } from '../lib/useAsync'
@@ -89,12 +89,24 @@ export default function ClassSummary() {
             </Button>
           </div>
 
-          <div className="mt-8 grid grid-cols-3 gap-6">
+          <div className="mt-8 grid grid-cols-4 gap-5">
+            <div className="card px-6 py-7">
+              <p className="label-caps">Submitted</p>
+              <p className="mt-2 text-[32px] font-bold leading-none">
+                {s.submissions.submitted} <span className="text-[15px] font-medium text-muted">of {s.students}</span>
+              </p>
+              {(s.submissions.not_submitted.length > 0 || s.submissions.unidentified > 0) && (
+                <p className="mt-2 text-[12px] text-muted">
+                  {s.submissions.not_submitted.length} not submitted
+                  {s.submissions.unidentified > 0 && <span className="text-warn-text"> · {s.submissions.unidentified} paper not identified</span>}
+                </p>
+              )}
+            </div>
             <Stat label="Papers approved" value={String(s.approved)} sub={`of ${s.students}`} />
             <Stat label="Average score" value={String(s.average_score)} sub={`/ ${s.out_of}`} />
             <div className="card px-6 py-7">
               <p className="label-caps">Most missed criterion</p>
-              <p className="mt-2 text-[28px] font-bold leading-tight text-bad-strong">{s.most_missed_criterion ?? '—'}</p>
+              <p className="mt-2 text-[24px] font-bold leading-tight text-bad-strong">{s.most_missed_criterion ?? '—'}</p>
             </div>
           </div>
 
@@ -111,7 +123,7 @@ export default function ClassSummary() {
               <div className="mt-4 flex flex-col gap-3">
                 {s.misconceptions.length === 0 && <p className="card px-6 py-6 text-[14px] text-muted">No repeated errors yet.</p>}
                 {s.misconceptions.map((m) => (
-                  <article key={m.text} className="card px-6 py-6">
+                  <article key={m.text} className="card lift px-6 py-6">
                     <div className="flex items-start justify-between gap-6">
                       <p className="text-[15px] font-semibold">
                         &quot;{m.count} of {s.students} students {m.text}&quot;
@@ -143,6 +155,24 @@ export default function ClassSummary() {
                 </Button>
                 <p className="mt-3 text-[11px] text-muted">{AI_LABEL}. Counts come from the reviewed grades, not from the AI.</p>
               </div>
+              {s.submissions.not_submitted.length > 0 && (
+                <div className="card mt-4 px-6 py-5">
+                  <h4 className="flex items-center gap-2 text-[15px] font-semibold">
+                    <UserRoundX className="h-4 w-4 text-muted" aria-hidden /> Not submitted ({s.submissions.not_submitted.length})
+                  </h4>
+                  <ul className="mt-3 space-y-1.5 text-[14px]">
+                    {s.submissions.not_submitted.map((r) => (
+                      <li key={r.student_id} className="flex justify-between gap-3">
+                        <span>{r.student_name}</span>
+                        <span className="tabular-nums text-muted">{r.student_id}</span>
+                      </li>
+                    ))}
+                  </ul>
+                  {s.submissions.unidentified > 0 && (
+                    <p className="mt-3 text-[12px] text-muted">One of these may be the unidentified paper. Assign it from the review queue.</p>
+                  )}
+                </div>
+              )}
             </section>
           </div>
         </>

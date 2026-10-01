@@ -62,9 +62,9 @@ def _crit(tpl_id: str) -> list[dict]:
 MATH = {
     "key": "math",
     "id": "act-linear-eq-quiz1",
-    "title": "Solving Linear Equations: Quiz 1",
+    "title": "College Algebra: Linear Equations Quiz 1",
     "subject": "math",
-    "class_name": "Grade 8 Rizal",
+    "class_name": "BS Computer Science 2A",
     "date": "2024-05-28",
     "settings": {"accept_alternate": True, "require_units": False, "feedback_style": "hint_only"},
     "rubric": _crit("tpl-math-linear"),
@@ -185,9 +185,9 @@ MATH = {
 SCIENCE = {
     "key": "science",
     "id": "act-forces-motion-quiz2",
-    "title": "Forces and Motion: Quiz 2",
+    "title": "Physics 1: Forces and Motion Quiz 2",
     "subject": "science",
-    "class_name": "Grade 8 Rizal",
+    "class_name": "BS Computer Science 2A",
     "date": "2024-05-27",
     "settings": {"accept_alternate": True, "require_units": True, "feedback_style": "full_solution"},
     "rubric": _crit("tpl-science-calc"),
@@ -282,9 +282,9 @@ SCIENCE = {
 GRAMMAR = {
     "key": "grammar",
     "id": "act-sva-worksheet3",
-    "title": "Subject-Verb Agreement: Worksheet 3",
+    "title": "Technical Writing: Subject-Verb Agreement Worksheet 3",
     "subject": "grammar",
-    "class_name": "Grade 8 Rizal",
+    "class_name": "BS Computer Science 2A",
     "date": "2024-05-27",
     "settings": {"accept_alternate": True, "require_units": False, "feedback_style": "hint_only"},
     "rubric": _crit("tpl-grammar-correction"),
@@ -370,13 +370,13 @@ GRAMMAR = {
     "reteach_focus": "A 10-minute lesson on finding the true subject in sentences with prepositional phrases, with 3 practice sentences.",
 }
 
-# ---------------------------------------------------------------- MATH: Fractions Review (Grade 7 Mabini, done)
+# ---------------------------------------------------------------- MATH: Fractions Review (BS Secondary Education 1B, done)
 FRACTIONS = {
     "key": "fractions",
     "id": "act-fractions-review",
-    "title": "Fractions Review",
+    "title": "Remedial Math: Fractions Review",
     "subject": "math",
-    "class_name": "Grade 7 Mabini",
+    "class_name": "BS Secondary Education 1B",
     "date": "2024-05-24",
     "settings": {"accept_alternate": True, "require_units": False, "feedback_style": "hint_only"},
     "rubric": _crit("tpl-math-fractions"),

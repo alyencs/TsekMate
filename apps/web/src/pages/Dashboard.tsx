@@ -1,12 +1,11 @@
 import { useState, type ReactNode } from 'react'
-import { ArrowUp, ArrowDown, BadgeCheck, Bell, ChevronDown, FlagTriangleRight, Hourglass, TrendingUp } from 'lucide-react'
+import { ArrowUp, ArrowDown, BadgeCheck, FlagTriangleRight, Hourglass, TrendingUp } from 'lucide-react'
 import { api } from '../lib/api'
 import { useAsync } from '../lib/useAsync'
 import { greeting, headerDate } from '../lib/format'
 import { getTeacher } from '../lib/session'
-import { AppShell, SearchBox } from '../components/layout/AppShell'
+import { AppShell, SearchBox, TopBarActions } from '../components/layout/AppShell'
 import { ActivitiesTable } from '../components/activities/ActivitiesTable'
-import { Avatar } from '../components/ui/Logo'
 import { ErrorState, Loading } from '../components/ui/States'
 
 export default function Dashboard() {
@@ -14,7 +13,7 @@ export default function Dashboard() {
   const dash = useAsync(() => api.dashboard(), [])
   const acts = useAsync(() => api.activities(), [])
   const teacher = getTeacher()
-  const name = teacher?.name ?? 'Ms. Reyes'
+  const name = teacher?.name ?? 'Prof. Ana Reyes'
 
   return (
     <AppShell
@@ -28,19 +27,7 @@ export default function Dashboard() {
             <p className="text-[13px] text-muted">{headerDate()}</p>
           </div>
           <SearchBox placeholder="Search activities..." value={q} onChange={setQ} width="w-60" />
-          <button className="relative rounded-full p-2 text-gray-600 hover:bg-gray-100" aria-label="Notifications (new items in the review queue)">
-            <Bell className="h-5 w-5" aria-hidden />
-            <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-bad-strong" aria-hidden />
-          </button>
-          <span className="h-8 w-px bg-line" aria-hidden />
-          <div className="flex items-center gap-3">
-            <Avatar size={32} />
-            <div className="leading-tight">
-              <p className="text-[14px] font-semibold">{name}</p>
-              <p className="text-[11px] text-muted">Teacher</p>
-            </div>
-            <ChevronDown className="ml-3 h-4 w-4 text-muted" aria-hidden />
-          </div>
+          <TopBarActions full />
         </>
       }
     >
@@ -98,7 +85,7 @@ function Stat({
   deltaCls: string
 }) {
   return (
-    <div className="card p-5">
+    <div className="card lift p-5">
       <div className="flex items-start justify-between">
         <span className={`flex h-9 w-9 items-center justify-center rounded-ctl ${iconCls}`} aria-hidden>
           {icon}

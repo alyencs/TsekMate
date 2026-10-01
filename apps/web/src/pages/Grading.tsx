@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { CircleCheck, CircleX, Hourglass, Loader2, Sparkles } from 'lucide-react'
 import { api } from '../lib/api'
 import type { GradingProgress } from '../lib/types'
@@ -11,6 +11,8 @@ import { Button } from '../components/ui/Button'
 export default function Grading() {
   const { id = '' } = useParams()
   const navigate = useNavigate()
+  const [params] = useSearchParams()
+  const returnTo = params.get('return') // Grade again: go back to that paper when done
   const activity = useAsync(() => api.activity(id), [id])
   const [prog, setProg] = useState<GradingProgress | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -25,7 +27,7 @@ export default function Grading() {
         setProg(p)
         setError(null)
         if (!p.running && p.total > 0 && p.done >= p.total) {
-          timer.current = window.setTimeout(() => navigate(`/queue?activity=${id}`), 1400)
+          timer.current = window.setTimeout(() => navigate(returnTo ? `/submissions/${returnTo}` : `/queue?activity=${id}`), 1400)
           return
         }
       } catch (e) {
@@ -38,7 +40,7 @@ export default function Grading() {
       alive = false
       window.clearTimeout(timer.current)
     }
-  }, [id, navigate])
+  }, [id, navigate, returnTo])
 
   const total = prog?.total ?? 0
   const done = prog?.done ?? 0
@@ -61,7 +63,7 @@ export default function Grading() {
             <Sparkles className="h-8 w-8" />
           </span>
           <h1 className="mt-6 text-[24px] font-bold">
-            {total === 0 ? 'Nothing to check' : `TsekMate is checking ${total} paper${total === 1 ? '' : 's'}`}
+            {total === 0 ? 'Nothing to check' : returnTo ? 'Grading this paper again' : `TsekMate is checking ${total} paper${total === 1 ? '' : 's'}`}
           </h1>
           <p className="mt-3 text-[15px] text-muted">Our AI is analyzing every step of the students&apos; work against your rubric.</p>
 
@@ -78,9 +80,9 @@ export default function Grading() {
           {windowed.length > 0 && (
             <ul className="mt-10 overflow-hidden rounded-card border border-line text-left">
               {windowed.map((i) => (
-                <li key={i.submission_id} className={`flex items-center gap-3 border-b border-line px-6 py-4 last:border-0 ${i.state === 'checking' ? 'bg-[#FFFBF7]' : i.state === 'waiting' ? 'text-gray-400' : ''}`}>
-                  <span className="w-11 text-[13px] font-semibold text-muted">{i.student_id}</span>
-                  <span className="flex-1 text-[15px]">{short}</span>
+                <li key={i.submission_id} className={`animate-fade flex items-center gap-3 border-b border-line px-6 py-4 transition-colors last:border-0 ${i.state === 'checking' ? 'bg-[#FFFBF7]' : i.state === 'waiting' ? 'text-gray-400' : ''}`}>
+                  <span className="flex-1 text-[15px]">{i.student_name ?? (i.state === 'done' || i.state === 'failed' ? 'Student not identified' : 'Reading name…')}</span>
+                  <span className="text-[13px] tabular-nums text-muted">{i.student_id ?? short}</span>
                   {i.state === 'done' && (
                     <span className="flex items-center gap-1.5 text-[15px] font-semibold text-[#16A34A]">
                       <CircleCheck className="h-4 w-4 fill-[#16A34A] text-white" aria-hidden /> Done
@@ -107,7 +109,7 @@ export default function Grading() {
           )}
           {failed > 0 && (
             <p className="mt-4 text-[13px] text-bad-text" role="status">
-              {failed} paper{failed === 1 ? '' : 's'} could not be graded automatically and will wait for you in the queue.
+              {failed} paper{failed === 1 ? '' : 's'} could not be graded automatically. Open {failed === 1 ? 'it' : 'them'} from the queue and press Grade again, or grade by hand.
             </p>
           )}
           {total === 0 && prog && (

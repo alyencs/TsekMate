@@ -25,7 +25,7 @@ export default function StudentFeedback() {
   const note = prob ? d?.review.feedback[prob.id] ?? '' : ''
   const short = d?.activity.title.includes(':') ? d.activity.title.split(':')[1].trim() : d?.activity.title
   const noun = d?.activity.subject === 'grammar' ? 'Item' : 'Problem'
-  const teacher = getTeacher()?.name ?? 'Ms. Reyes'
+  const teacher = getTeacher()?.name ?? 'your teacher'
 
   function speak() {
     if (!canSpeak) return
