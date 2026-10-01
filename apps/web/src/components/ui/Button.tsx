@@ -5,8 +5,8 @@ type Variant = 'primary' | 'dark' | 'secondary' | 'ghost' | 'link' | 'soft'
 type Size = 'sm' | 'md' | 'lg'
 
 const variants: Record<Variant, string> = {
-  // Orange = the call to action. `accent-strong` keeps white text at 4.5:1.
-  primary: 'bg-accent-strong text-white shadow-cta hover:bg-accent-dark hover:shadow-[0_8px_20px_-8px_rgba(210,69,12,0.55)] disabled:bg-[#E9A27F] disabled:shadow-none',
+  // Orange (brand) = the call to action. `brand-strong` keeps white text at 4.5:1.
+  primary: 'bg-brand-strong text-white shadow-cta hover:bg-brand-dark hover:shadow-[0_8px_20px_-8px_rgba(210,69,12,0.55)] disabled:bg-[#E9A27F] disabled:shadow-none',
   dark: 'bg-navy text-white shadow-sm hover:bg-navy-700 disabled:bg-navy/40',
   secondary: 'bg-white text-ink border border-line shadow-card hover:border-[#CBD2E1] hover:bg-soft disabled:text-muted disabled:bg-soft',
   ghost: 'text-muted hover:bg-soft hover:text-ink',

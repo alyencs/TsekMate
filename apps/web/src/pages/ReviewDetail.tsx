@@ -222,7 +222,7 @@ export default function ReviewDetail() {
             aria-current={sel ? 'true' : undefined}
             aria-label={`${cfg.problemNoun} ${p.order}${flag ? ', needs your check' : clean ? ', all correct' : ''}`}
             className={`relative flex h-9 w-9 shrink-0 items-center justify-center rounded-ctl border text-[13px] font-semibold transition-colors ${
-              sel ? 'border-navy bg-navy text-white ring-2 ring-accent ring-offset-1' : clean ? 'border-ok-bar bg-ok-bar text-white' : 'border-line bg-white text-ink hover:border-brand-tint hover:bg-brand-light'
+              sel ? 'border-brand-strong bg-brand-strong text-white ring-2 ring-brand-tint ring-offset-1' : clean ? 'border-ok-bar bg-ok-bar text-white' : 'border-line bg-white text-ink hover:border-brand-tint hover:bg-brand-light'
             }`}
           >
             {p.order}

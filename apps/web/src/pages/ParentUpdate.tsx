@@ -68,7 +68,7 @@ export default function ParentUpdate() {
               ['fil', 'Filipino'],
             ] as const
           ).map(([k, l]) => (
-            <button key={k} type="button" role="tab" id={`lang-${k}`} aria-selected={lang === k} aria-controls="msg-panel" tabIndex={lang === k ? 0 : -1} onClick={() => setLang(k)} className={`h-9 rounded-full px-5 text-[14px] transition-colors sm:px-6 ${lang === k ? 'bg-navy font-semibold text-white' : 'text-muted hover:bg-soft'}`}>
+            <button key={k} type="button" role="tab" id={`lang-${k}`} aria-selected={lang === k} aria-controls="msg-panel" tabIndex={lang === k ? 0 : -1} onClick={() => setLang(k)} className={`h-9 rounded-full px-5 text-[14px] transition-colors sm:px-6 ${lang === k ? 'bg-brand-strong font-semibold text-white' : 'text-muted hover:bg-soft'}`}>
               {l}
             </button>
           ))}

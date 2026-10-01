@@ -43,7 +43,7 @@ export default function StudentFeedback() {
   }
 
   return (
-    <main className="animate-page flex min-h-screen flex-col items-center bg-page bg-[radial-gradient(60%_40%_at_50%_0%,#E0E7FF_0%,transparent_70%)] px-4 py-10 sm:px-6 sm:py-20">
+    <main className="animate-page flex min-h-screen flex-col items-center bg-page bg-[radial-gradient(60%_40%_at_50%_0%,#FFEDD5_0%,transparent_70%)] px-4 py-10 sm:px-6 sm:py-20">
       <Logo size={40} tagline />
       {detail.error ? (
         <ErrorState message={detail.error} onRetry={detail.reload} />
@@ -80,7 +80,7 @@ export default function StudentFeedback() {
               type="button"
               onClick={speak}
               disabled={!canSpeak}
-              className="mt-8 flex min-h-[64px] w-full items-center justify-center gap-3 rounded-2xl bg-accent-strong px-4 text-[17px] font-semibold text-white shadow-cta transition-colors hover:bg-accent-dark disabled:opacity-50 sm:mt-10 sm:min-h-[80px] sm:text-[19px]"
+              className="mt-8 flex min-h-[64px] w-full items-center justify-center gap-3 rounded-2xl bg-brand-strong px-4 text-[17px] font-semibold text-white shadow-cta transition-colors hover:bg-brand-dark disabled:opacity-50 sm:mt-10 sm:min-h-[80px] sm:text-[19px]"
               aria-pressed={speaking}
             >
               {speaking ? <Square className="h-6 w-6" aria-hidden /> : <Volume2 className="h-7 w-7" aria-hidden />}

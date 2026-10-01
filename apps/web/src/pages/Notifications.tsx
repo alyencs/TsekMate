@@ -55,7 +55,7 @@ export default function Notifications() {
                 aria-controls="notifications-panel"
                 tabIndex={filter === k ? 0 : -1}
                 onClick={() => setFilter(k)}
-                className={`h-9 rounded-full px-4 text-[14px] transition-colors ${filter === k ? 'bg-navy font-semibold text-white' : 'text-muted hover:text-ink'}`}
+                className={`h-9 rounded-full px-4 text-[14px] transition-colors ${filter === k ? 'bg-brand-strong font-semibold text-white' : 'text-muted hover:text-ink'}`}
               >
                 {l}
               </button>

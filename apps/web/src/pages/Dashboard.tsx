@@ -78,8 +78,8 @@ function Workflow({ reviewTo }: { reviewTo: string }) {
   ]
   return (
     <section aria-labelledby="flow-title" className="card mt-6 overflow-hidden sm:mt-8">
-      <div className="flex flex-col gap-4 p-4 sm:p-5 lg:flex-row lg:items-center lg:gap-6">
-        <div className="lg:w-[220px] lg:shrink-0">
+      <div className="flex flex-col gap-4 p-4 sm:p-5 xl:flex-row xl:items-center xl:gap-6">
+        <div className="xl:w-[200px] xl:shrink-0">
           <h2 id="flow-title" className="text-[15px] font-semibold">
             How grading works
           </h2>

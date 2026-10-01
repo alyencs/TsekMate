@@ -63,7 +63,7 @@ export function AppShell({
                 <LogoMark size={28} />
                 <span className="text-[17px] font-bold">
                   <span className="text-navy">Tsek</span>
-                  <span className="text-accent">Mate</span>
+                  <span className="text-brand">Mate</span>
                 </span>
               </span>
               <span className="hidden flex-1 lg:block" />
@@ -133,7 +133,7 @@ export function TopBar({
             onClick={() => setSearchOpen(true)}
           >
             <Search className="h-5 w-5" aria-hidden />
-            {search.value && <span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-accent" aria-hidden />}
+            {search.value && <span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-brand" aria-hidden />}
           </button>
           {searchOpen && (
             <div className="animate-fade absolute inset-0 z-10 flex items-center gap-2 bg-white px-3 sm:px-6 md:hidden">

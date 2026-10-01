@@ -37,7 +37,7 @@ export function Logo({
       <span className="flex flex-col leading-none">
         <span className="font-bold tracking-tight" style={{ fontSize: Math.round(size * 0.6) }}>
           <span className={light ? 'text-white' : 'text-navy'}>Tsek</span>
-          <span className="text-accent">Mate</span>
+          <span className="text-brand">Mate</span>
         </span>
         {tagline && (
           <span className={`mt-1 font-medium ${light ? 'text-[#C7D2FE]' : 'text-navy-700'}`} style={{ fontSize: Math.max(11, Math.round(size * 0.3)) }}>
@@ -53,7 +53,7 @@ export function Avatar({ size = 32, initials }: { size?: number; initials?: stri
   if (initials)
     return (
       <span
-        className="inline-flex shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-brand to-navy-700 font-semibold text-white"
+        className="inline-flex shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-brand to-brand-dark font-semibold text-white"
         style={{ width: size, height: size, fontSize: Math.round(size * 0.38) }}
         aria-hidden
       >
@@ -63,8 +63,8 @@ export function Avatar({ size = 32, initials }: { size?: number; initials?: stri
   // Illustrated placeholder avatar (no real photo of a person).
   return (
     <svg width={size} height={size} viewBox="0 0 40 40" aria-hidden className="shrink-0 rounded-full">
-      <circle cx="20" cy="20" r="20" fill="#E0E7FF" />
-      <path d="M8 34c1-9 6-13 12-13s11 4 12 13" fill="#4338CA" />
+      <circle cx="20" cy="20" r="20" fill="#FFEDD5" />
+      <path d="M8 34c1-9 6-13 12-13s11 4 12 13" fill="#C2410C" />
       <path d="M10 22c-1-10 4-15 10-15s11 5 10 15c-1 4-3 7-5 8H15c-2-1-4-4-5-8z" fill="#3B2A22" />
       <circle cx="20" cy="18" r="7" fill="#F2C9A8" />
       <path d="M12.5 16c1-5 5-7 8-7s6 2 7 6c-3-1-6-3-8-5-1 3-4 5-7 6z" fill="#3B2A22" />

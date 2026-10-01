@@ -12,7 +12,7 @@ import { SubjectChip } from '../components/ui/Chip'
 import { Modal } from '../components/ui/Modal'
 import { ErrorState, Loading } from '../components/ui/States'
 
-const INDIGO = '#4F46E5'
+const BLUE = '#2563EB' // accent
 
 export default function ClassSummary() {
   const [activityId, setActivityId, idError] = useActivityId()
@@ -236,8 +236,8 @@ function ChartCard({ title, data, max }: { title: string; data: { name: string; 
             <CartesianGrid stroke="#EEF1F7" vertical={false} />
             <XAxis dataKey="name" tick={{ fontSize: 10, fill: '#5B6478' }} tickLine={false} axisLine={{ stroke: '#CBD2E1' }} interval={0} angle={narrow ? -30 : 0} textAnchor={narrow ? 'end' : 'middle'} height={narrow ? 64 : 30} />
             <YAxis tick={{ fontSize: 10, fill: '#5B6478' }} tickLine={false} axisLine={false} domain={max ? [0, max] : [0, 'auto']} allowDecimals={false} />
-            <Tooltip cursor={{ fill: '#EEF2FF' }} contentStyle={{ fontSize: 12, borderRadius: 10, border: '1px solid #E3E7F0', fontFamily: 'Poppins, sans-serif' }} />
-            <Bar dataKey="value" fill={INDIGO} radius={[6, 6, 0, 0]} maxBarSize={56} isAnimationActive={false} />
+            <Tooltip cursor={{ fill: '#EFF6FF' }} contentStyle={{ fontSize: 12, borderRadius: 10, border: '1px solid #E3E7F0', fontFamily: 'Poppins, sans-serif' }} />
+            <Bar dataKey="value" fill={BLUE} radius={[6, 6, 0, 0]} maxBarSize={56} isAnimationActive={false} />
           </BarChart>
         </ResponsiveContainer>
       </div>
