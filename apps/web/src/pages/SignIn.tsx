@@ -1,21 +1,29 @@
 import { useState, type FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Check, CircleCheck, CircleX, Sparkles } from 'lucide-react'
+import { CircleCheck, CircleX, Eye, EyeOff, Info, ShieldCheck, Sparkles, UserRoundCheck } from 'lucide-react'
 import { api } from '../lib/api'
 import { setTeacher } from '../lib/session'
 import { Button } from '../components/ui/Button'
+import { Logo } from '../components/ui/Logo'
 
 export default function SignIn() {
   const navigate = useNavigate()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [show, setShow] = useState(false)
   const [remember, setRemember] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [info, setInfo] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
 
   async function submit(e: FormEvent) {
     e.preventDefault()
     setError(null)
+    setInfo(null)
+    if (!email.trim() || !password) {
+      setError('Enter your email address and password.')
+      return
+    }
     setLoading(true)
     try {
       const t = await api.signIn(email, password)
@@ -29,19 +37,14 @@ export default function SignIn() {
   }
 
   return (
-    <div className="grid min-h-screen grid-cols-1 bg-white lg:grid-cols-2">
-      <main className="flex items-center px-8 py-16 lg:px-[140px]">
-        <div className="w-full max-w-[440px]">
-          <div className="flex items-center gap-3">
-            <span className="flex h-10 w-10 items-center justify-center rounded-[8px] bg-brand text-white" aria-hidden>
-              <Check className="h-5 w-5" strokeWidth={3} />
-            </span>
-            <span className="text-[24px] font-bold tracking-tight">TsekMate</span>
-          </div>
-          <h1 className="mt-12 text-[30px] font-bold tracking-tight">Welcome back</h1>
-          <p className="mt-2 text-[16px] text-muted">Sign in to your teacher account</p>
+    <div className="grid min-h-screen grid-cols-1 bg-white lg:grid-cols-[minmax(0,1fr)_minmax(0,1.05fr)]">
+      <main className="animate-page flex items-center justify-center px-5 py-10 sm:px-10 sm:py-16">
+        <div className="w-full max-w-[420px]">
+          <Logo size={46} tagline />
+          <h1 className="mt-10 text-[26px] font-bold sm:mt-12 sm:text-[30px]">Welcome back</h1>
+          <p className="mt-1.5 text-[15px] text-muted">Sign in to your teacher account</p>
 
-          <form onSubmit={submit} className="mt-10 flex flex-col" noValidate>
+          <form onSubmit={submit} className="mt-8 flex flex-col" noValidate aria-describedby={error ? 'signin-error' : undefined}>
             <label htmlFor="email" className="text-[14px] font-medium">
               Email address
             </label>
@@ -49,87 +52,136 @@ export default function SignIn() {
               id="email"
               type="email"
               autoComplete="email"
+              inputMode="email"
               required
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               placeholder="name@university.edu.ph"
-              className="field mt-2 h-12 rounded-[10px]"
+              aria-invalid={!!error && !email.trim()}
+              className="field mt-2 h-12"
             />
-            <div className="mt-6 flex items-center justify-between">
+            <div className="mt-5 flex items-center justify-between">
               <label htmlFor="password" className="text-[14px] font-medium">
                 Password
               </label>
-              <button type="button" className="text-[14px] font-semibold text-brand-dark hover:underline" onClick={() => setError('Password reset is handled by your school admin.')}>
+              <button
+                type="button"
+                className="rounded text-[13px] font-semibold text-brand-dark hover:underline"
+                onClick={() => {
+                  setError(null)
+                  setInfo('Password resets are handled by your school’s TsekMate administrator.')
+                }}
+              >
                 Forgot password?
               </button>
             </div>
-            <input
-              id="password"
-              type="password"
-              autoComplete="current-password"
-              required
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="••••••••"
-              className="field mt-2 h-12 rounded-[10px]"
-            />
-            <label className="mt-6 flex items-center gap-12 text-[14px] text-gray-600">
-              <input type="checkbox" checked={remember} onChange={(e) => setRemember(e.target.checked)} className="h-5 w-5 rounded border-gray-400 accent-brand" />
+            <div className="relative mt-2">
+              <input
+                id="password"
+                type={show ? 'text' : 'password'}
+                autoComplete="current-password"
+                required
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="••••••••"
+                aria-invalid={!!error && !password}
+                className="field h-12 pr-12"
+              />
+              <button
+                type="button"
+                onClick={() => setShow((s) => !s)}
+                className="absolute right-1.5 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-ctl text-muted hover:bg-soft hover:text-ink"
+                aria-label={show ? 'Hide password' : 'Show password'}
+                aria-pressed={show}
+              >
+                {show ? <EyeOff className="h-4 w-4" aria-hidden /> : <Eye className="h-4 w-4" aria-hidden />}
+              </button>
+            </div>
+            <label className="mt-5 flex w-fit items-center gap-3 text-[14px] text-[#3B4260]">
+              <input type="checkbox" checked={remember} onChange={(e) => setRemember(e.target.checked)} className="h-[18px] w-[18px] rounded border-[#B7C0D3] accent-brand" />
               Remember me for 30 days
             </label>
             {error && (
-              <p role="alert" className="mt-5 flex items-center gap-2 rounded-ctl border border-bad-border bg-bad-bg px-3 py-2 text-[14px] text-bad-text">
-                <CircleX className="h-4 w-4 shrink-0" aria-hidden />
+              <p id="signin-error" role="alert" className="notice notice-bad animate-fade mt-5">
+                <CircleX className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
                 {error}
               </p>
             )}
-            <Button type="submit" loading={loading} className="mt-6 h-12 w-full rounded-[10px] text-[16px]">
-              Sign in
+            {info && (
+              <p role="status" className="notice notice-info animate-fade mt-5">
+                <Info className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
+                {info}
+              </p>
+            )}
+            <Button type="submit" size="lg" loading={loading} className="mt-6 w-full">
+              {loading ? 'Signing in…' : 'Sign in'}
             </Button>
           </form>
-          <p className="mt-8 text-center text-[14px] text-gray-600">Don&apos;t have an account?</p>
-          <p className="text-[16px] font-semibold text-brand-dark">Contact your school admin</p>
+          <p className="mt-8 text-center text-[14px] text-muted">
+            Don&apos;t have an account? <span className="font-semibold text-ink">Contact your school admin.</span>
+          </p>
+          <p className="mt-8 flex items-start justify-center gap-2 text-center text-[12px] text-muted lg:hidden">
+            <ShieldCheck className="mt-0.5 h-3.5 w-3.5 shrink-0 text-brand" aria-hidden />
+            AI drafts every grade. You approve every grade.
+          </p>
         </div>
       </main>
 
-      <aside aria-hidden className="relative hidden items-center justify-center overflow-hidden bg-[#FFF1E6] lg:flex">
-        <div className="absolute -right-10 -top-10 h-40 w-40 rounded-full bg-white/30" />
-        <div className="absolute -bottom-16 left-0 h-48 w-48 rounded-full bg-white/20" />
-        <div className="flex flex-col items-center">
-          <p className="text-center text-[38px] font-bold leading-[1.2] tracking-tight">
-            <span className="text-ink">Every step checked.</span>
+      <aside aria-hidden className="on-dark relative hidden items-center justify-center overflow-hidden bg-navy px-10 py-16 lg:flex">
+        <div className="absolute inset-0 bg-[radial-gradient(70%_60%_at_80%_10%,#323C96_0%,transparent_70%),radial-gradient(60%_50%_at_10%_100%,#262E7A_0%,transparent_70%)]" />
+        <div className="absolute -right-16 -top-16 h-56 w-56 rounded-full border border-white/10" />
+        <div className="absolute -bottom-24 -left-10 h-72 w-72 rounded-full border border-white/10" />
+        <Sparkles className="absolute right-[14%] top-[12%] h-8 w-8 text-accent" />
+        <div className="relative flex max-w-[520px] flex-col items-center">
+          <p className="text-center text-[34px] font-bold leading-[1.2] xl:text-[38px]">
+            <span className="text-white">Every step checked.</span>
             <br />
-            <span className="text-brand">Every teacher in control.</span>
+            <span className="text-accent">Every teacher in control.</span>
           </p>
-          <div className="relative mt-10 h-[410px] w-[440px]">
-            <div className="absolute left-[18px] top-[14px] h-[400px] w-[430px] rotate-[1.5deg] rounded-2xl border border-line bg-white/80" />
-            <div className="absolute inset-0 rotate-[2deg] rounded-2xl border border-line bg-white p-8 shadow-pop">
-              <div className="h-4 w-[90%] rounded bg-gray-100" />
-              <div className="mt-4 h-4 w-[70%] rounded bg-gray-100" />
+          <p className="mt-4 text-center text-[15px] text-[#C7CDF0]">TsekMate drafts the grade from your rubric. You review, adjust, and approve it.</p>
+
+          <div className="relative mt-10 w-full max-w-[420px]">
+            <div className="absolute inset-0 translate-x-4 translate-y-3 rotate-[2deg] rounded-2xl bg-white/10" />
+            <div className="relative rounded-2xl bg-white p-7 shadow-pop">
+              <div className="flex items-center justify-between">
+                <div className="h-3.5 w-40 rounded bg-[#E9EDF5]" />
+                <span className="rounded-full bg-brand-light px-2.5 py-1 text-[11px] font-semibold text-brand-dark">AI draft</span>
+              </div>
               {[
                 ['w-[48%]', true],
                 ['w-[60%]', true],
-                ['w-[30%]', false],
+                ['w-[34%]', false],
               ].map(([w, ok], i) => (
-                <div key={i} className="mt-7 flex items-center justify-between">
-                  <div className={`h-3 ${w} rounded bg-gray-100`} />
-                  <span className={`flex items-center gap-1.5 text-[15px] font-semibold ${ok ? 'text-[#16A34A]' : 'text-bad-strong'}`}>
-                    {ok ? <CircleCheck className="h-5 w-5 fill-[#16A34A] text-white" /> : <CircleX className="h-5 w-5 fill-bad-strong text-white" />}
+                <div key={i} className="mt-6 flex items-center justify-between">
+                  <div className={`h-3 ${w} rounded bg-[#E9EDF5]`} />
+                  <span className={`flex items-center gap-1.5 text-[14px] font-semibold ${ok ? 'text-ok-text' : 'text-bad-text'}`}>
+                    {ok ? <CircleCheck className="h-5 w-5 fill-ok-bar text-white" /> : <CircleX className="h-5 w-5 fill-bad-strong text-white" />}
                     {ok ? 'Correct' : 'Error'}
                   </span>
                 </div>
               ))}
-              <div className="mt-12 border-t border-line pt-4">
-                <p className="text-[11px] uppercase tracking-wider text-muted">Grade</p>
-                <div className="mt-2 flex items-end justify-between">
-                  <span className="text-[30px] font-bold text-brand">85%</span>
-                  <span className="flex h-12 w-12 items-center justify-center rounded-full bg-brand-light text-brand">
-                    <Sparkles className="h-4 w-4" />
-                  </span>
+              <div className="mt-8 flex items-end justify-between border-t border-line pt-4">
+                <div>
+                  <p className="label-caps">Final grade</p>
+                  <p className="mt-1 text-[30px] font-bold text-navy">
+                    8.5 <span className="text-[16px] font-medium text-muted">/ 10</span>
+                  </p>
                 </div>
+                <span className="flex items-center gap-1.5 rounded-full bg-accent-light px-3 py-1.5 text-[12px] font-semibold text-accent-text">
+                  <UserRoundCheck className="h-4 w-4" /> Approved by teacher
+                </span>
               </div>
             </div>
           </div>
+
+          <ol className="mt-10 flex items-center gap-2 text-[13px] font-medium text-[#C7CDF0]">
+            {['Upload work', 'AI drafts', 'You review', 'You approve'].map((s, i) => (
+              <li key={s} className="flex items-center gap-2">
+                {i > 0 && <span className="h-px w-4 bg-white/25" />}
+                <span className={`rounded-full px-3 py-1 ${i === 3 ? 'bg-accent text-navy-950 font-semibold' : 'bg-white/10'}`}>{s}</span>
+              </li>
+            ))}
+          </ol>
         </div>
       </aside>
     </div>

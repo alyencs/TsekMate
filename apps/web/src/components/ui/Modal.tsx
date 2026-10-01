@@ -1,4 +1,5 @@
-import { useEffect, useRef, type ReactNode } from 'react'
+import { useRef, type ReactNode } from 'react'
+import { useFocusTrap, useScrollLock } from '../../lib/a11y'
 
 export function Modal({
   open,
@@ -14,41 +15,18 @@ export function Modal({
   className?: string
 }) {
   const ref = useRef<HTMLDivElement>(null)
-  useEffect(() => {
-    if (!open) return
-    const prev = document.activeElement as HTMLElement | null
-    const first = ref.current?.querySelector<HTMLElement>('button, a, [tabindex]:not([tabindex="-1"])')
-    first?.focus()
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose()
-      if (e.key === 'Tab' && ref.current) {
-        const els = Array.from(ref.current.querySelectorAll<HTMLElement>('button, a, textarea, input, [tabindex]:not([tabindex="-1"])'))
-        if (!els.length) return
-        const [a, b] = [els[0], els[els.length - 1]]
-        if (e.shiftKey && document.activeElement === a) {
-          e.preventDefault()
-          b.focus()
-        } else if (!e.shiftKey && document.activeElement === b) {
-          e.preventDefault()
-          a.focus()
-        }
-      }
-    }
-    document.addEventListener('keydown', onKey)
-    return () => {
-      document.removeEventListener('keydown', onKey)
-      prev?.focus()
-    }
-  }, [open, onClose])
+  useFocusTrap(ref, open, onClose)
+  useScrollLock(open)
   if (!open) return null
   return (
-    <div className="animate-fade fixed inset-0 z-50 flex items-center justify-center bg-gray-500/60 p-4 backdrop-blur-[2px]" onMouseDown={onClose}>
+    <div className="animate-fade fixed inset-0 z-[60] flex items-end justify-center bg-navy-950/50 p-3 backdrop-blur-[3px] sm:items-center sm:p-4" onMouseDown={onClose}>
       <div
         ref={ref}
         role="dialog"
         aria-modal="true"
         aria-labelledby={labelledBy}
-        className={`animate-dialog rounded-2xl bg-white shadow-pop ${className}`}
+        tabIndex={-1}
+        className={`animate-dialog max-h-[calc(100dvh-1.5rem)] w-full overflow-y-auto overscroll-contain rounded-2xl bg-white shadow-pop focus:outline-none sm:max-h-[calc(100dvh-2rem)] ${className}`}
         onMouseDown={(e) => e.stopPropagation()}
       >
         {children}

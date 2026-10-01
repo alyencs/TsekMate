@@ -14,6 +14,7 @@ import ParentUpdate from './pages/ParentUpdate'
 import StudentFeedback from './pages/StudentFeedback'
 import Profile from './pages/Profile'
 import Settings from './pages/Settings'
+import Notifications from './pages/Notifications'
 import { getTeacher } from './lib/session'
 
 function RequireTeacher({ children }: { children: ReactNode }) {
@@ -42,6 +43,7 @@ export default function App() {
       <Route path="/feedback/:id" element={guard(<StudentFeedback />)} />
       <Route path="/profile" element={guard(<Profile />)} />
       <Route path="/settings" element={guard(<Settings />)} />
+      <Route path="/notifications" element={guard(<Notifications />)} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   )

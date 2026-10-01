@@ -9,7 +9,7 @@ export function ConfidenceBar({ value, width = 'w-20' }: { value: number; width?
   return (
     <span className="inline-flex items-center gap-2" title={high ? `Confidence at or above ${t}%` : `Low confidence, below ${t}%`}>
       <span
-        className={`relative h-1.5 ${width} overflow-hidden rounded-full bg-gray-200`}
+        className={`relative h-1.5 ${width} overflow-hidden rounded-full bg-[#E3E7F0]`}
         role="meter"
         aria-valuemin={0}
         aria-valuemax={100}
@@ -21,7 +21,7 @@ export function ConfidenceBar({ value, width = 'w-20' }: { value: number; width?
           style={{ width: `${Math.max(2, Math.min(100, value * 100))}%` }}
         />
       </span>
-      <span className={`text-[11px] font-semibold ${high ? 'text-ok-bar' : 'text-warn-bar'}`}>{pct(value)}</span>
+      <span className={`text-[11px] font-semibold ${high ? 'text-ok-text' : 'text-warn-text'}`}>{pct(value)}</span>
     </span>
   )
 }

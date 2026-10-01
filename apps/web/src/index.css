@@ -6,44 +6,100 @@
   html,
   body,
   #root {
-    height: 100%;
+    min-height: 100%;
+  }
+  html {
+    -webkit-text-size-adjust: 100%;
+    scroll-padding-top: 80px;
   }
   body {
     @apply bg-page text-ink font-sans antialiased;
-    font-feature-settings: 'cv11', 'ss01';
+    overflow-x: hidden;
+  }
+  h1, h2, h3, h4 {
+    @apply tracking-tight;
+  }
+  ::selection {
+    background: #c7d2fe;
+    color: #161b3d;
   }
   :focus-visible {
-    outline: 2px solid #ea580c;
+    outline: 2px solid #4f46e5;
     outline-offset: 2px;
+  }
+  /* Dark surfaces (sidebar, drawer, sign-in panel) get a light focus ring. */
+  .on-dark :focus-visible {
+    outline-color: #fdba74;
   }
   input[type='number']::-webkit-inner-spin-button {
     opacity: 0.4;
+  }
+  button:not(:disabled),
+  [role='button']:not([aria-disabled='true']),
+  summary,
+  label[for] {
+    cursor: pointer;
   }
 }
 
 @layer components {
   .card {
-    @apply bg-white border border-line rounded-card shadow-card;
+    @apply rounded-card border border-line bg-white shadow-card;
   }
   .label-caps {
     @apply text-[11px] font-semibold uppercase tracking-[0.08em] text-muted;
   }
   .field {
-    @apply h-10 w-full rounded-ctl border border-line bg-white px-4 text-[15px] text-ink placeholder:text-gray-400
-      focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20;
+    @apply h-11 w-full rounded-ctl border border-line bg-white px-4 text-[15px] text-ink transition-[border-color,box-shadow] duration-150
+      placeholder:text-[#8790A6] hover:border-[#CBD2E1] focus:border-brand focus:outline-none focus:ring-4 focus:ring-brand/15
+      disabled:cursor-not-allowed disabled:bg-soft disabled:text-muted;
   }
   .field-soft {
-    @apply w-full rounded-ctl border border-line bg-[#F9F7F5] px-4 text-[15px] text-ink
-      focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20;
+    @apply w-full rounded-ctl border border-line bg-soft px-4 text-[15px] text-ink transition-[border-color,box-shadow,background-color] duration-150
+      focus:border-brand focus:bg-white focus:outline-none focus:ring-4 focus:ring-brand/15;
+  }
+  /* Pill filters (subject chips etc.) */
+  .pill {
+    @apply inline-flex h-8 shrink-0 items-center rounded-full px-3.5 text-[13px] font-medium transition-colors duration-150;
+  }
+  .pill-off {
+    @apply bg-white text-ink ring-1 ring-inset ring-line hover:bg-brand-light hover:text-brand-dark hover:ring-brand-tint;
+  }
+  .pill-on {
+    @apply bg-navy text-white ring-1 ring-inset ring-navy;
+  }
+  /* Notices (status / error banners) */
+  .notice {
+    @apply flex items-start gap-2 rounded-ctl border px-4 py-3 text-[14px] leading-snug;
+  }
+  .notice-ok {
+    @apply border-ok-border bg-ok-bg text-ok-text;
+  }
+  .notice-bad {
+    @apply border-bad-border bg-bad-bg text-bad-text;
+  }
+  .notice-info {
+    @apply border-brand-tint bg-brand-light text-brand-dark;
   }
   .sr-only-focusable:not(:focus) {
     @apply sr-only;
+  }
+  /* Horizontal scrollers (tabs, chips) without a visible scrollbar on touch. */
+  .scroll-x {
+    @apply overflow-x-auto overscroll-x-contain;
+    scrollbar-width: none;
+  }
+  .scroll-x::-webkit-scrollbar {
+    display: none;
+  }
+  .safe-bottom {
+    padding-bottom: max(0.75rem, env(safe-area-inset-bottom));
   }
 }
 
 /* ---------- Motion: short, purposeful, and off when the user asks for less motion ---------- */
 @keyframes tm-page {
-  from { opacity: 0; transform: translateY(4px); }
+  from { opacity: 0; transform: translateY(6px); }
   to { opacity: 1; transform: none; }
 }
 @keyframes tm-pop {
@@ -55,8 +111,12 @@
   to { opacity: 1; }
 }
 @keyframes tm-dialog {
-  from { opacity: 0; transform: scale(0.96) translateY(8px); }
+  from { opacity: 0; transform: scale(0.96) translateY(10px); }
   to { opacity: 1; transform: none; }
+}
+@keyframes tm-drawer {
+  from { transform: translateX(-100%); }
+  to { transform: none; }
 }
 @keyframes tm-check {
   0% { transform: scale(0.6); opacity: 0; }
@@ -67,21 +127,67 @@
   from { background-position: -200px 0; }
   to { background-position: 200px 0; }
 }
-.animate-page { animation: tm-page 200ms ease-out both; }
-.animate-pop { animation: tm-pop 140ms ease-out both; }
-.animate-fade { animation: tm-fade 160ms ease-out both; }
-.animate-dialog { animation: tm-dialog 200ms cubic-bezier(0.2, 0.8, 0.2, 1) both; }
-.animate-check { animation: tm-check 360ms ease-out both; }
+@keyframes tm-twinkle {
+  0%, 100% { transform: scale(1) rotate(0deg); opacity: 1; }
+  50% { transform: scale(0.82) rotate(12deg); opacity: 0.85; }
+}
+.animate-page { animation: tm-page 260ms cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+.animate-rise { animation: tm-page 320ms cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+.animate-pop { animation: tm-pop 150ms ease-out both; }
+.animate-fade { animation: tm-fade 180ms ease-out both; }
+.animate-dialog { animation: tm-dialog 220ms cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+.animate-drawer { animation: tm-drawer 240ms cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+.animate-check { animation: tm-check 380ms ease-out both; }
+.animate-twinkle { animation: tm-twinkle 2.8s ease-in-out infinite; transform-origin: center; transform-box: fill-box; }
 .skeleton {
-  background: linear-gradient(90deg, #f3f1ef 0, #faf8f6 50%, #f3f1ef 100%) 0 0 / 400px 100%;
+  background: linear-gradient(90deg, #eef1f7 0, #f7f8fc 50%, #eef1f7 100%) 0 0 / 400px 100%;
   animation: tm-shimmer 1.2s linear infinite;
 }
-.lift { transition: box-shadow 150ms ease, transform 150ms ease, border-color 150ms ease; }
-.lift:hover { box-shadow: 0 6px 20px -10px rgba(16, 24, 40, 0.18); transform: translateY(-1px); }
+.lift { transition: box-shadow 180ms ease, transform 180ms ease, border-color 180ms ease; }
+.lift:hover { box-shadow: 0 10px 28px -14px rgba(27, 33, 96, 0.28); transform: translateY(-2px); }
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; scroll-behavior: auto !important; }
+  .lift:hover { transform: none; }
 }
 html.reduce-motion *, html.reduce-motion *::before, html.reduce-motion *::after {
   animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; scroll-behavior: auto !important;
+}
+html.reduce-motion .lift:hover { transform: none; }
+
+/* ---------- Editable tables (rubric editors) reflow into stacked rows on phones ---------- */
+@media (max-width: 767px) {
+  .rtable,
+  .rtable tbody {
+    display: block;
+  }
+  .rtable thead {
+    display: none;
+  }
+  .rtable tbody tr {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.75rem 0;
+  }
+  .rtable tbody td {
+    display: block;
+    width: auto !important;
+    padding: 0 !important;
+  }
+  .rtable tbody td:first-child {
+    grid-column: 1 / -1;
+  }
+  .rtable tbody tr.rtotal {
+    display: flex;
+    justify-content: space-between;
+    padding: 0.875rem 1rem;
+  }
+  .rtable tbody tr.rtotal td {
+    text-align: left;
+  }
+  .rtable tbody tr.rtotal td:empty {
+    display: none;
+  }
 }

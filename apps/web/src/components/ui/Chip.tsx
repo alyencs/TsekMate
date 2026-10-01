@@ -16,20 +16,21 @@ export function SubjectIcon({ subject, className = 'h-3.5 w-3.5' }: { subject: S
 export function SubjectChip({ subject, size = 'md' }: { subject: Subject; size?: 'sm' | 'md' }) {
   const cls = size === 'sm' ? 'h-6 px-2 text-[11px] gap-1' : 'h-[26px] px-2.5 text-[13px] gap-1.5'
   return (
-    <span className={`inline-flex items-center rounded-full bg-brand-light font-semibold text-brand-dark ${cls}`}>
+    <span className={`inline-flex items-center rounded-full bg-brand-light font-semibold text-brand-dark ring-1 ring-inset ring-brand-100 ${cls}`}>
       <SubjectIcon subject={subject} className={size === 'sm' ? 'h-3 w-3' : 'h-3.5 w-3.5'} />
       {SUBJECTS[subject].label}
     </span>
   )
 }
 
-type Tone = 'ok' | 'bad' | 'warn' | 'brand' | 'neutral'
+type Tone = 'ok' | 'bad' | 'warn' | 'brand' | 'accent' | 'neutral'
 const tones: Record<Tone, string> = {
   ok: 'bg-ok-bg text-ok-text border-ok-border',
   bad: 'bg-bad-bg text-bad-text border-bad-border',
   warn: 'bg-warn-bg text-warn-text border-warn-border',
   brand: 'bg-brand-light text-brand-dark border-brand-tint',
-  neutral: 'bg-gray-50 text-muted border-line',
+  accent: 'bg-accent-light text-accent-text border-accent-tint',
+  neutral: 'bg-soft text-muted border-line',
 }
 
 export function Badge({

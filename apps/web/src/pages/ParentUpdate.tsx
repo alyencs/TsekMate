@@ -5,6 +5,7 @@ import { api } from '../lib/api'
 import type { ParentMessage } from '../lib/types'
 import { useAsync } from '../lib/useAsync'
 import { AppShell, TopBar } from '../components/layout/AppShell'
+import { rovingKeyDown } from '../lib/a11y'
 import { Button } from '../components/ui/Button'
 import { SubjectChip } from '../components/ui/Chip'
 import { ErrorState, Loading } from '../components/ui/States'
@@ -52,33 +53,33 @@ export default function ParentUpdate() {
       topbar={
         <TopBar
           title={
-            <span className="flex items-center gap-3">
-              Parent update: {detail.data ? detail.data.student_name ?? detail.data.student_id ?? 'Not identified' : '…'} {detail.data && <SubjectChip subject={detail.data.activity.subject} size="sm" />}
+            <span className="flex min-w-0 items-center gap-3">
+              <span className="truncate">Parent update: {detail.data ? detail.data.student_name ?? detail.data.student_id ?? 'Not identified' : '…'}</span>{' '}{detail.data && <span className="hidden sm:inline-flex"><SubjectChip subject={detail.data.activity.subject} size="sm" /></span>}
             </span>
           }
         />
       }
     >
       <div className="mx-auto max-w-[736px]">
-        <div role="tablist" aria-label="Language" className="mx-auto flex w-fit gap-1 rounded-[10px] border border-line bg-white p-1 shadow-card">
+        <div role="tablist" aria-label="Language" className="mx-auto flex w-fit gap-1 rounded-full border border-line bg-white p-1 shadow-card" onKeyDown={(e) => rovingKeyDown(e, 'tab')}>
           {(
             [
               ['en', 'English'],
               ['fil', 'Filipino'],
             ] as const
           ).map(([k, l]) => (
-            <button key={k} role="tab" aria-selected={lang === k} onClick={() => setLang(k)} className={`h-9 rounded-ctl px-6 text-[15px] ${lang === k ? 'bg-brand font-semibold text-white' : 'text-gray-600 hover:bg-gray-50'}`}>
+            <button key={k} type="button" role="tab" id={`lang-${k}`} aria-selected={lang === k} aria-controls="msg-panel" tabIndex={lang === k ? 0 : -1} onClick={() => setLang(k)} className={`h-9 rounded-full px-5 text-[14px] transition-colors sm:px-6 ${lang === k ? 'bg-navy font-semibold text-white' : 'text-muted hover:bg-soft'}`}>
               {l}
             </button>
           ))}
         </div>
 
-        <section className="card mt-8 overflow-hidden shadow-pop" aria-label="Message preview">
-          <div className="flex items-center justify-between border-b border-line bg-[#F9F7F5] px-4 py-4">
+        <section id="msg-panel" role="tabpanel" aria-labelledby={`lang-${lang}`} className="card mt-6 overflow-hidden shadow-pop sm:mt-8">
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line bg-soft px-4 py-3 sm:py-4">
             <p className="label-caps">Message preview</p>
             <span className="rounded border border-warn-border bg-warn-bg px-2 py-1 text-[11px] font-semibold text-warn-text">{sent ? 'Approved by you' : 'Draft, needs teacher approval'}</span>
           </div>
-          <div className="px-8 py-8">
+          <div className="px-4 py-5 sm:px-8 sm:py-8">
             {error ? (
               <ErrorState message={error} onRetry={generate} />
             ) : !msg ? (
@@ -94,9 +95,9 @@ export default function ParentUpdate() {
                   readOnly={!editing}
                   value={text[lang]}
                   onChange={(e) => setText((t) => ({ ...t, [lang]: e.target.value }))}
-                  className={`w-full resize-y rounded-[10px] border border-line px-6 py-6 text-[16px] leading-relaxed ${editing ? 'bg-white focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20' : 'bg-[#FCFBFA]'}`}
+                  className={`w-full resize-y rounded-[10px] border border-line px-4 py-4 text-[15px] leading-relaxed sm:px-6 sm:py-6 sm:text-[16px] ${editing ? 'bg-white focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20' : 'bg-soft/60'}`}
                 />
-                <p className="mt-7 flex items-center gap-3 rounded-[10px] border border-warn-border/60 bg-[#FEFBF0] px-4 py-4 text-[13px] text-[#CA8A04]">
+                <p className="mt-5 flex items-center gap-3 rounded-[10px] border border-warn-border bg-warn-bg px-4 py-3 text-[13px] text-warn-text">
                   <Info className="h-4 w-4 shrink-0" aria-hidden />
                   Machine-drafted message. Please review before sending.
                 </p>
@@ -106,19 +107,19 @@ export default function ParentUpdate() {
         </section>
 
         {sent && (
-          <p role="status" className="mt-6 rounded-ctl border border-ok-border bg-ok-bg px-4 py-3 text-[14px] text-ok-text">
+          <p role="status" className="notice notice-ok animate-fade mt-6">
             Approved. {sent}
           </p>
         )}
-        <div className="mt-8 flex gap-4">
-          <Button size="lg" className="h-[60px] flex-1 text-[17px] shadow-md" iconRight={<Send className="h-4 w-4" aria-hidden />} onClick={send} loading={sending} disabled={!msg || !!sent || !text[lang].trim()}>
+        <div className="mt-6 flex flex-col-reverse gap-3 sm:mt-8 sm:flex-row sm:gap-4">
+          <Button size="lg" className="w-full sm:flex-1" iconRight={<Send className="h-4 w-4" aria-hidden />} onClick={send} loading={sending} disabled={!msg || !!sent || !text[lang].trim()}>
             Approve and send message
           </Button>
-          <Button size="lg" variant="secondary" className="h-[60px] w-28 text-[17px]" onClick={() => (sent ? navigate(-1) : setEditing((e) => !e))} disabled={!msg}>
+          <Button size="lg" variant="secondary" className="w-full sm:w-28" onClick={() => (sent ? navigate(-1) : setEditing((e) => !e))} disabled={!msg}>
             {sent ? 'Back' : editing ? 'Done' : 'Edit'}
           </Button>
         </div>
-        <p className="mt-10 text-center text-[13px] text-muted">Parents will receive this via the TsekMate Parent App or SMS.</p>
+        <p className="mt-8 text-center text-[13px] text-muted sm:mt-10">Parents will receive this via the TsekMate Parent App or SMS.</p>
       </div>
     </AppShell>
   )

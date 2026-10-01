@@ -1,14 +1,23 @@
-import { useMemo, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
-import { ChevronDown, ChevronLeft, ChevronRight, Filter, Plus } from 'lucide-react'
+import { useCallback, useMemo, useRef, useState } from 'react'
+import { Link, useNavigate } from 'react-router-dom'
+import { Check, ChevronDown, ChevronLeft, ChevronRight, ChevronRight as Go, Filter, Plus } from 'lucide-react'
 import type { ActivitySummary, Subject } from '../../lib/types'
 import { SUBJECTS, SUBJECT_LIST } from '../../lib/subjects'
 import { relativeDay } from '../../lib/format'
+import { rovingKeyDown, useDismiss } from '../../lib/a11y'
 import { SubjectChip } from '../ui/Chip'
 import { Button } from '../ui/Button'
 import { EmptyState } from '../ui/States'
 
 const PAGE = 10
+
+function statusOf(a: ActivitySummary) {
+  const done = a.papers > 0 && a.to_review === 0
+  const target = a.papers === 0 ? `/activities/${a.id}/upload` : done ? `/class-summary?activity=${a.id}` : `/queue?activity=${a.id}`
+  const label = a.papers === 0 ? 'No papers yet' : done ? 'Done' : `${a.to_review} to review`
+  const tone = a.papers === 0 ? 'bg-soft text-muted ring-line' : done ? 'bg-ok-bg text-ok-text ring-ok-border' : 'bg-accent-light text-accent-text ring-accent-tint'
+  return { target, label, tone }
+}
 
 export function ActivitiesTable({
   activities,
@@ -26,6 +35,10 @@ export function ActivitiesTable({
   const [klass, setKlass] = useState<string>('all')
   const [menu, setMenu] = useState(false)
   const [page, setPage] = useState(0)
+  const menuBox = useRef<HTMLDivElement>(null)
+  const menuBtn = useRef<HTMLButtonElement>(null)
+  const closeMenu = useCallback(() => setMenu(false), [])
+  useDismiss(menu, closeMenu, menuBox, menuBtn)
   const classes = useMemo(() => Array.from(new Set(activities.map((a) => a.class_name))).sort(), [activities])
   const rows = activities.filter(
     (a) =>
@@ -39,135 +52,182 @@ export function ActivitiesTable({
 
   return (
     <section className="card overflow-hidden" aria-labelledby="activities-title">
-      <div className="flex items-start justify-between gap-4 border-b border-line px-6 py-5">
-        <div>
+      <div className="flex flex-col gap-4 border-b border-line px-4 py-4 sm:flex-row sm:items-start sm:justify-between sm:px-6 sm:py-5">
+        <div className="min-w-0">
           <h2 id="activities-title" className="text-[17px] font-semibold">
             {title}
           </h2>
           <p className="mt-0.5 text-[13px] text-muted">
-            {active} assignment{active === 1 ? '' : 's'} across your classes · grades are AI-assisted drafts until you approve them
+            {active} assignment{active === 1 ? '' : 's'} across your classes · grades stay AI-assisted drafts until you approve them
           </p>
         </div>
-        <div className="flex items-center gap-3">
-          <div className="relative">
-            <Button variant="secondary" icon={<Filter className="h-4 w-4 text-muted" aria-hidden />} iconRight={<ChevronDown className="h-4 w-4 text-muted" aria-hidden />} aria-expanded={menu} aria-haspopup="listbox" onClick={() => setMenu((m) => !m)}>
-              {klass === 'all' ? 'Filter' : klass}
+        <div className="flex shrink-0 items-center gap-2 sm:gap-3">
+          <div className="relative flex-1 sm:flex-none" ref={menuBox}>
+            <Button
+              ref={menuBtn}
+              variant="secondary"
+              className="w-full max-w-full sm:w-auto"
+              icon={<Filter className="h-4 w-4 text-muted" aria-hidden />}
+              iconRight={<ChevronDown className={`h-4 w-4 text-muted transition-transform ${menu ? 'rotate-180' : ''}`} aria-hidden />}
+              aria-expanded={menu}
+              aria-haspopup="menu"
+              onClick={() => setMenu((m) => !m)}
+              onKeyDown={(e) => e.key === 'ArrowDown' && (e.preventDefault(), setMenu(true))}
+            >
+              <span className="max-w-[160px] truncate">{klass === 'all' ? 'All classes' : klass}</span>
             </Button>
             {menu && (
-              <ul role="listbox" aria-label="Filter by class" className="absolute right-0 z-10 mt-2 w-48 rounded-ctl border border-line bg-white py-1 shadow-pop">
+              <div
+                role="menu"
+                aria-label="Filter by class"
+                onKeyDown={(e) => rovingKeyDown(e, 'menuitemradio')}
+                className="animate-pop absolute left-0 z-20 mt-2 w-64 origin-top-left rounded-card border border-line bg-white py-1 shadow-pop sm:left-auto sm:right-0 sm:origin-top-right"
+                ref={(el) => el?.querySelector<HTMLElement>('[aria-checked="true"]')?.focus()}
+              >
                 {['all', ...classes].map((c) => (
-                  <li key={c}>
-                    <button
-                      role="option"
-                      aria-selected={klass === c}
-                      className={`w-full px-3 py-2 text-left text-[14px] hover:bg-gray-50 ${klass === c ? 'font-semibold text-brand-dark' : ''}`}
-                      onClick={() => {
-                        setKlass(c)
-                        setMenu(false)
-                        setPage(0)
-                      }}
-                    >
-                      {c === 'all' ? 'All classes' : c}
-                    </button>
-                  </li>
+                  <button
+                    key={c}
+                    type="button"
+                    role="menuitemradio"
+                    aria-checked={klass === c}
+                    tabIndex={-1}
+                    className={`flex w-full items-center justify-between gap-2 px-4 py-2.5 text-left text-[14px] hover:bg-soft focus:bg-soft focus:outline-none ${klass === c ? 'font-semibold text-brand-dark' : ''}`}
+                    onClick={() => {
+                      setKlass(c)
+                      setMenu(false)
+                      setPage(0)
+                      menuBtn.current?.focus()
+                    }}
+                  >
+                    {c === 'all' ? 'All classes' : c}
+                    {klass === c && <Check className="h-4 w-4 text-brand" aria-hidden />}
+                  </button>
                 ))}
-              </ul>
+              </div>
             )}
           </div>
-          <Button icon={<Plus className="h-4 w-4" aria-hidden />} onClick={() => navigate('/activities/new')}>
+          <Button icon={<Plus className="h-4 w-4" aria-hidden />} onClick={() => navigate('/activities/new')} className="shrink-0">
             New activity
           </Button>
         </div>
       </div>
 
-      <div className="flex gap-2 px-6 pt-5" role="group" aria-label="Filter by subject">
+      <div className="scroll-x flex gap-2 px-4 pt-4 sm:px-6 sm:pt-5" role="group" aria-label="Filter by subject">
         {(['all', ...SUBJECT_LIST] as const).map((s) => (
           <button
             key={s}
+            type="button"
             aria-pressed={subject === s}
             onClick={() => {
               setSubject(s)
               setPage(0)
             }}
-            className={`h-7 rounded-full px-3 text-[13px] font-medium transition-colors ${subject === s ? 'bg-brand text-white' : 'bg-brand-light text-brand-dark hover:bg-orange-100'}`}
+            className={`pill ${subject === s ? 'pill-on' : 'pill-off'}`}
           >
-            {s === 'all' ? 'All' : SUBJECTS[s].label}
+            {s === 'all' ? 'All subjects' : SUBJECTS[s].label}
           </button>
         ))}
       </div>
 
       {shown.length === 0 ? (
-        <EmptyState title="No activities match">Try another subject or class, or create a new activity.</EmptyState>
+        <EmptyState title="No activities match" action={<Button variant="secondary" size="sm" className="mt-2" onClick={() => navigate('/activities/new')}>Create an activity</Button>}>
+          Try another subject or class, or create a new activity.
+        </EmptyState>
       ) : (
-        <table className="mt-3 w-full text-left">
-          <thead>
-            <tr className="border-b border-line text-[12px] font-semibold uppercase tracking-wider text-muted">
-              <th scope="col" className="px-6 py-3">Activity</th>
-              <th scope="col" className="px-4 py-3">Subject</th>
-              <th scope="col" className="px-4 py-3">Class</th>
-              <th scope="col" className="px-4 py-3">Papers</th>
-              <th scope="col" className="px-4 py-3">Status</th>
-              <th scope="col" className="px-6 py-3">Last updated</th>
-            </tr>
-          </thead>
-          <tbody>
+        <>
+          {/* Cards on phones */}
+          <ul className="mt-3 divide-y divide-line border-t border-line md:hidden">
             {shown.map((a) => {
-              const done = a.papers > 0 && a.to_review === 0
-              const target = a.papers === 0 ? `/activities/${a.id}/upload` : done ? `/class-summary?activity=${a.id}` : `/queue?activity=${a.id}`
+              const st = statusOf(a)
               return (
-                <tr key={a.id} className="cursor-pointer border-b border-line transition-colors last:border-0 hover:bg-[#FFFBF7]" onClick={() => navigate(target)}>
-                  <td className="px-6 py-4">
-                    <a
-                      href={target}
-                      onClick={(e) => {
-                        e.preventDefault()
-                        navigate(target)
-                      }}
-                      className="text-[15px] font-semibold text-ink hover:underline"
-                    >
-                      {a.title}
-                    </a>
-                  </td>
-                  <td className="px-4 py-4">
-                    <SubjectChip subject={a.subject} />
-                  </td>
-                  <td className="px-4 py-4 text-[15px] text-gray-700">{a.class_name}</td>
-                  <td className="whitespace-nowrap px-4 py-4 text-[15px] text-gray-700">
-                    <span className="tabular-nums">{a.papers}</span>
-                    {a.roster_size > 0 && <span className="text-[13px] text-gray-400"> / {a.roster_size}</span>}
-                  </td>
-                  <td className="px-4 py-4">
-                    <span className="whitespace-nowrap text-[15px] font-medium">{a.papers === 0 ? 'No papers yet' : done ? 'Done' : `${a.to_review} to review`}</span>
-                    {a.not_submitted > 0 && <span className="block text-[12px] text-muted">{a.not_submitted} not submitted</span>}
-                  </td>
-                  <td className="px-6 py-4 text-[15px] text-muted">{relativeDay(a.updated_at)}</td>
-                </tr>
+                <li key={a.id}>
+                  <Link to={st.target} className="flex items-center gap-3 px-4 py-4 transition-colors hover:bg-rowhover">
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-[15px] font-semibold leading-snug text-ink">{a.title}</span>
+                      <span className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1.5 text-[12px] text-muted">
+                        <SubjectChip subject={a.subject} size="sm" />
+                        <span className={`inline-flex h-6 items-center rounded-full px-2 font-semibold ring-1 ring-inset ${st.tone}`}>{st.label}</span>
+                      </span>
+                      <span className="mt-1.5 block truncate text-[12px] text-muted">
+                        {a.class_name} · {a.papers}
+                        {a.roster_size > 0 ? `/${a.roster_size}` : ''} papers · {relativeDay(a.updated_at)}
+                      </span>
+                    </span>
+                    <Go className="h-4 w-4 shrink-0 text-[#8790A6]" aria-hidden />
+                  </Link>
+                </li>
               )
             })}
-          </tbody>
-        </table>
+          </ul>
+
+          {/* Table on tablet and desktop */}
+          <div className="mt-3 hidden overflow-x-auto md:block">
+            <table className="w-full text-left">
+              <thead>
+                <tr className="border-y border-line bg-soft/70 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted">
+                  <th scope="col" className="px-6 py-3">Activity</th>
+                  <th scope="col" className="px-4 py-3">Subject</th>
+                  <th scope="col" className="hidden px-4 py-3 lg:table-cell">Class</th>
+                  <th scope="col" className="px-4 py-3">Papers</th>
+                  <th scope="col" className="px-4 py-3">Status</th>
+                  <th scope="col" className="px-6 py-3">Updated</th>
+                </tr>
+              </thead>
+              <tbody>
+                {shown.map((a) => {
+                  const st = statusOf(a)
+                  return (
+                    <tr key={a.id} className="group cursor-pointer border-b border-line transition-colors last:border-0 hover:bg-rowhover" onClick={() => navigate(st.target)}>
+                      <td className="px-6 py-4">
+                        <Link to={st.target} onClick={(e) => e.stopPropagation()} className="text-[14px] font-semibold text-ink group-hover:text-brand-dark hover:underline">
+                          {a.title}
+                        </Link>
+                        <span className="mt-0.5 block text-[12px] text-muted lg:hidden">{a.class_name}</span>
+                      </td>
+                      <td className="px-4 py-4">
+                        <SubjectChip subject={a.subject} size="sm" />
+                      </td>
+                      <td className="hidden px-4 py-4 text-[14px] text-[#3B4260] lg:table-cell">{a.class_name}</td>
+                      <td className="whitespace-nowrap px-4 py-4 text-[14px] text-[#3B4260]">
+                        <span className="tabular-nums">{a.papers}</span>
+                        {a.roster_size > 0 && <span className="text-[13px] text-muted"> / {a.roster_size}</span>}
+                      </td>
+                      <td className="px-4 py-4">
+                        <span className={`inline-flex h-6 items-center whitespace-nowrap rounded-full px-2.5 text-[12px] font-semibold ring-1 ring-inset ${st.tone}`}>{st.label}</span>
+                        {a.not_submitted > 0 && <span className="mt-1 block text-[12px] text-muted">{a.not_submitted} not submitted</span>}
+                      </td>
+                      <td className="whitespace-nowrap px-6 py-4 text-[14px] text-muted">{relativeDay(a.updated_at)}</td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        </>
       )}
 
-      <div className="flex items-center justify-between border-t border-line px-6 py-4">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line px-4 py-3 sm:px-6 sm:py-4">
         <p className="text-[13px] text-muted">
           Showing {shown.length} of {rows.length} activit{rows.length === 1 ? 'y' : 'ies'}
         </p>
-        <nav aria-label="Pagination" className="flex items-center gap-2">
-          <button className="flex h-8 w-8 items-center justify-center rounded-ctl border border-line text-muted disabled:opacity-40" disabled={page === 0} onClick={() => setPage(page - 1)} aria-label="Previous page">
-            <ChevronLeft className="h-4 w-4" />
+        <nav aria-label="Pagination" className="flex items-center gap-1.5">
+          <button type="button" className="flex h-9 w-9 items-center justify-center rounded-ctl border border-line text-muted transition-colors hover:bg-soft disabled:opacity-40" disabled={page === 0} onClick={() => setPage(page - 1)} aria-label="Previous page">
+            <ChevronLeft className="h-4 w-4" aria-hidden />
           </button>
           {Array.from({ length: pages }, (_, i) => (
             <button
               key={i}
+              type="button"
               aria-current={i === page ? 'page' : undefined}
+              aria-label={`Page ${i + 1}`}
               onClick={() => setPage(i)}
-              className={`h-8 min-w-8 rounded-ctl px-2 text-[14px] font-medium ${i === page ? 'bg-brand text-white' : 'border border-line text-ink'}`}
+              className={`h-9 min-w-9 rounded-ctl px-2 text-[14px] font-medium transition-colors ${i === page ? 'bg-navy text-white' : 'border border-line text-ink hover:bg-soft'}`}
             >
               {i + 1}
             </button>
           ))}
-          <button className="flex h-8 w-8 items-center justify-center rounded-ctl border border-line text-muted disabled:opacity-40" disabled={page >= pages - 1} onClick={() => setPage(page + 1)} aria-label="Next page">
-            <ChevronRight className="h-4 w-4" />
+          <button type="button" className="flex h-9 w-9 items-center justify-center rounded-ctl border border-line text-muted transition-colors hover:bg-soft disabled:opacity-40" disabled={page >= pages - 1} onClick={() => setPage(page + 1)} aria-label="Next page">
+            <ChevronRight className="h-4 w-4" aria-hidden />
           </button>
         </nav>
       </div>
