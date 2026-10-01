@@ -4,6 +4,8 @@ import json
 
 import pytest
 from fastapi.testclient import TestClient
+
+from tests.helpers import blank, sign_in
 from PIL import Image
 
 from app.config import get_settings
@@ -20,6 +22,7 @@ def client():
     from app.store import get_store
 
     with TestClient(app) as c:
+        sign_in(c)
         reset_and_seed(get_store())
         yield c
 
@@ -53,7 +56,7 @@ def ai(monkeypatch):
 
 def png() -> bytes:
     buf = io.BytesIO()
-    Image.new("RGB", (300, 400), "white").save(buf, format="PNG")
+    blank((300, 400)).save(buf, format="PNG")
     return buf.getvalue()
 
 
@@ -71,6 +74,7 @@ def grade_one(client, ai, act, plans):
 
     ai["problems"], ai["plans"], ai["calls"] = act["problems"], plans, 0
     sid = client.post(f"/api/activities/{act['id']}/submissions", files=[("files", ("p.png", png(), "image/png"))]).json()[0]["id"]
+    get_store().update("submissions", sid, {"status": "grading", "grading_attempt": "test"})  # what jobs.start does
     jobs.grade_submission(get_store(), sid)
     return client.get(f"/api/submissions/{sid}").json()
 

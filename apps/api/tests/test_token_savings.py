@@ -6,6 +6,8 @@ from types import SimpleNamespace as NS
 
 import pytest
 from fastapi.testclient import TestClient
+
+from tests.helpers import blank, sign_in
 from PIL import Image
 
 from app.config import get_settings
@@ -23,6 +25,7 @@ def client():
     from app.store import get_store
 
     with TestClient(app) as c:
+        sign_in(c)
         reset_and_seed(get_store())
         yield c
 
@@ -55,7 +58,7 @@ def message(text, inp=1000, out=400, stop="end_turn"):
 def png(size, fmt="PNG", exif=None):
     buf = io.BytesIO()
     kw = {"exif": exif} if exif is not None else {}
-    Image.new("RGB", size, "white").save(buf, format=fmt, **kw)
+    blank(size).save(buf, format=fmt, **kw)
     return buf.getvalue()
 
 

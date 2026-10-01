@@ -2,6 +2,8 @@ import io
 
 import pytest
 from fastapi.testclient import TestClient
+
+from tests.helpers import blank, sign_in
 from PIL import Image
 
 
@@ -10,6 +12,7 @@ def client():
     from app.main import app
 
     with TestClient(app) as c:
+        sign_in(c)
         yield c
 
 
@@ -65,13 +68,15 @@ def test_upload_starts_unidentified_grading_without_key_fails_safely_and_teacher
     monkeypatch.setattr(get_settings(), "demo_mode", False)
     assert client.delete("/api/submissions/sub-math-2026-002").status_code == 204
     buf = io.BytesIO()
-    Image.new("RGB", (400, 500), "white").save(buf, format="PNG")
+    blank((400, 500)).save(buf, format="PNG")
     r = client.post(f"/api/activities/{A}/submissions", files=[("files", ("p.png", buf.getvalue(), "image/png"))])
     assert r.status_code == 201
     sid = r.json()[0]["id"]
     assert r.json()[0]["student_id"] is None  # identified later from the paper, or by the teacher
     from app.services import jobs
     from app.store import get_store
+
+    get_store().update("submissions", sid, {"status": "grading", "grading_attempt": "test"})  # what jobs.start does
 
     res = jobs.grade_submission(get_store(), sid)
     assert res["status"] == "failed" and res["flags"] == ["grading_failed"]
