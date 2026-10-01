@@ -100,6 +100,18 @@ Errors reach the teacher without exposing the key: missing key, rejected key, pe
 limit (HTTP 429), no credit, timeout, connection error, provider outage, refusal, cut-off or malformed JSON (retried
 once). A paper that fails is marked **Grading failed** with the reason and a **Grade again** button.
 
+**Troubleshooting: "No module named 'anthropic'" / "The Anthropic Python SDK is not installed".** The API is running
+in a Python environment without the SDK (for example one set up while the project briefly used Gemini). Stop the API
+and reinstall in the same environment that runs `uvicorn`:
+
+```bash
+cd apps/api && . .venv/bin/activate        # Windows: .venv\Scripts\activate
+pip install -r requirements.txt
+uvicorn app.main:app --port 8000
+```
+
+`/api/health` then reports `"ai": "configured"`. Papers that failed meanwhile can be retried with **Grade again**.
+
 ### Supabase
 
 1. Create a project. In the SQL editor run [`apps/api/db/schema.sql`](apps/api/db/schema.sql) (tables, RLS on with no

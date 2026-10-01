@@ -112,3 +112,10 @@ def test_errors_map_to_safe_messages(fake, exc, status, needle):
     assert e.value.status == status
     assert needle in str(e.value)
     assert "SECRET" not in str(e.value)
+
+
+def test_missing_sdk_gives_install_instructions(monkeypatch):
+    monkeypatch.setattr(get_settings(), "anthropic_api_key", "sk-ant-test")
+    monkeypatch.setattr(llm, "sdk_installed", lambda: False)
+    with pytest.raises(llm.LLMUnavailable, match="pip install -r apps/api/requirements.txt"):
+        llm.call([{"role": "user", "content": "x"}])
