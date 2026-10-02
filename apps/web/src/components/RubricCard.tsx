@@ -38,9 +38,9 @@ export function RubricCard({ activity, onSaved }: { activity: Activity; onSaved:
   }
 
   return (
-    <section className={`card mt-6 px-6 py-5 ${errs.length ? 'border-warn-border' : ''}`} aria-labelledby="rubric-card-title">
-      <div className="flex items-center justify-between gap-4">
-        <div>
+    <section className={`card mt-5 px-4 py-5 sm:mt-6 sm:px-6 ${errs.length ? 'border-warn-border' : ''}`} aria-labelledby="rubric-card-title">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+        <div className="min-w-0">
           <h2 id="rubric-card-title" className="text-[15px] font-semibold">
             Rubric · {fmt(activity.rubric_total)} points per {noun}
           </h2>
@@ -61,11 +61,11 @@ export function RubricCard({ activity, onSaved }: { activity: Activity; onSaved:
 
       {editing ? (
         <div className="mt-4">
-          <label className="flex items-center gap-3 text-[14px] font-semibold">
+          <label className="flex flex-wrap items-center gap-3 text-[14px] font-semibold">
             Total points per {noun}
             <input type="number" min={0} step="any" className="field h-9 w-24 text-right" value={total ?? ''} onChange={(e) => setTotal(e.target.value === '' ? null : Number(e.target.value))} />
           </label>
-          <table className="mt-3 w-full text-left">
+          <table className="rtable mt-3 w-full text-left">
             <thead>
               <tr className="border-b border-line text-[11px] font-semibold uppercase tracking-[0.08em] text-muted">
                 <th scope="col" className="w-[220px] py-2 pr-3">Criterion</th>
@@ -87,16 +87,16 @@ export function RubricCard({ activity, onSaved }: { activity: Activity; onSaved:
                     <input aria-label={`Criterion ${i + 1} points`} type="number" min={0} step="any" className="field h-9 w-16 px-2 text-right" value={c.points} onChange={(e) => set(i, { points: Number(e.target.value) })} />
                   </td>
                   <td className="py-1.5 text-center">
-                    <button className="rounded p-1 text-gray-400 hover:text-bad-strong" aria-label={`Remove criterion ${i + 1}`} onClick={() => setDraft((d) => d.filter((_, j) => j !== i))}>
-                      <Trash2 className="h-4 w-4" />
+                    <button type="button" className="flex h-9 w-9 items-center justify-center rounded-ctl text-[#8790A6] hover:bg-bad-bg hover:text-bad-strong" aria-label={`Remove criterion ${i + 1}`} onClick={() => setDraft((d) => d.filter((_, j) => j !== i))}>
+                      <Trash2 className="h-4 w-4" aria-hidden />
                     </button>
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
-          <div className="mt-3 flex items-center justify-between">
-            <button className="flex items-center gap-1.5 text-[14px] font-semibold text-brand-dark hover:underline" onClick={() => setDraft((d) => [...d, { name: '', description: '', points: 0 }])}>
+          <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
+            <button type="button" className="flex items-center gap-1.5 text-[14px] font-semibold text-brand-dark hover:underline" onClick={() => setDraft((d) => [...d, { name: '', description: '', points: 0 }])}>
               <Plus className="h-4 w-4" aria-hidden /> Add criterion
             </button>
             <p className="text-[13px] text-muted">
@@ -108,7 +108,7 @@ export function RubricCard({ activity, onSaved }: { activity: Activity; onSaved:
       ) : (
         <ul className="mt-3 flex flex-wrap gap-2">
           {activity.rubric.map((c) => (
-            <li key={c.name} className="rounded-full border border-line bg-[#F9F7F5] px-3 py-1 text-[13px]" title={c.description}>
+            <li key={c.name} className="rounded-full border border-line bg-soft px-3 py-1 text-[13px]" title={c.description}>
               {c.name} <b>{fmt(c.points)}</b>
             </li>
           ))}
@@ -132,7 +132,7 @@ export function RubricCard({ activity, onSaved }: { activity: Activity; onSaved:
           <Button variant="secondary" size="sm" onClick={() => setEditing(false)}>
             Cancel
           </Button>
-          <Button size="sm" onClick={save} loading={saving} disabled={errs.length > 0}>
+          <Button size="sm" variant="dark" onClick={save} loading={saving} disabled={errs.length > 0}>
             Save rubric
           </Button>
         </div>

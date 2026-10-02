@@ -5,7 +5,7 @@ import type { AppSettings, FeedbackStyle } from '../lib/types'
 import { getReduceMotion, loadSettings, setReduceMotion, setSettingsCache } from '../lib/appSettings'
 import { AppShell, TopBar } from '../components/layout/AppShell'
 import { Toggle } from '../components/ui/Toggle'
-import { ErrorState, Loading } from '../components/ui/States'
+import { ErrorState, Loading, Notice } from '../components/ui/States'
 
 export default function Settings() {
   const [s, setS] = useState<AppSettings | null>(null)
@@ -41,13 +41,14 @@ export default function Settings() {
       ) : (
         <div className="mx-auto flex max-w-[760px] flex-col gap-6">
           {saved && (
-            <p role="status" className="animate-fade rounded-ctl border border-ok-border bg-ok-bg px-4 py-2.5 text-[14px] text-ok-text">
+            <Notice tone="ok" className="sticky top-[76px] z-10 shadow-card">
+              <CircleCheck className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
               {saved}
-            </p>
+            </Notice>
           )}
 
           <Section title="AI grading">
-            <div className="flex items-start justify-between gap-6">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-6">
               <div>
                 <p className="text-[15px] font-semibold">AI-assisted grading</p>
                 <p className="mt-0.5 text-[13px] text-muted">
@@ -56,17 +57,17 @@ export default function Settings() {
                     : 'Not available right now. Ask your TsekMate administrator to finish the setup. You can still grade papers by hand.'}
                 </p>
               </div>
-              <div className="shrink-0 text-right">
-                <p className={`inline-flex items-center gap-1 text-[13px] font-semibold ${s.ai.available || s.ai.demo_mode ? 'text-ok-text' : 'text-bad-text'}`}>
+              <div className="shrink-0 sm:text-right">
+                <p className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[12px] font-semibold ${s.ai.available || s.ai.demo_mode ? 'bg-ok-bg text-ok-text' : 'bg-bad-bg text-bad-text'}`}>
                   {s.ai.available || s.ai.demo_mode ? <CircleCheck className="h-3.5 w-3.5" aria-hidden /> : <CircleAlert className="h-3.5 w-3.5" aria-hidden />}
                   {s.ai.available || s.ai.demo_mode ? 'Ready' : 'Not available'}
                 </p>
               </div>
             </div>
             <div>
-              <label htmlFor="threshold" className="flex items-center justify-between text-[15px] font-semibold">
+              <label htmlFor="threshold" className="flex items-center justify-between gap-3 text-[15px] font-semibold">
                 Confidence threshold
-                <span className="font-mono text-[14px] text-brand-dark">{Math.round(s.confidence_threshold * 100)}%</span>
+                <span className="rounded-full bg-brand-light px-2.5 py-0.5 text-[14px] font-semibold tabular-nums text-brand-dark">{Math.round(s.confidence_threshold * 100)}%</span>
               </label>
               <p className="mt-0.5 text-[13px] text-muted">
                 A paper goes to &quot;Needs review&quot; if any step is below this confidence. Changing it re-sorts papers that are not approved yet.
@@ -82,20 +83,21 @@ export default function Settings() {
                 onMouseUp={() => save({ confidence_threshold: s.confidence_threshold }, 'Confidence threshold')}
                 onKeyUp={() => save({ confidence_threshold: s.confidence_threshold }, 'Confidence threshold')}
                 onTouchEnd={() => save({ confidence_threshold: s.confidence_threshold }, 'Confidence threshold')}
-                className="mt-3 w-full accent-brand"
+                className="mt-3 h-6 w-full cursor-pointer accent-brand"
+                aria-valuetext={`${Math.round(s.confidence_threshold * 100)} percent`}
               />
             </div>
             <fieldset>
               <legend className="text-[15px] font-semibold">Default feedback mode for new activities</legend>
-              <div className="mt-2 flex gap-3">
+              <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:gap-3">
                 {(
                   [
                     ['hint_only', 'Hint only'],
                     ['full_solution', 'Full solution'],
                   ] as [FeedbackStyle, string][]
                 ).map(([v, l]) => (
-                  <label key={v} className={`flex cursor-pointer items-center gap-2 rounded-ctl border px-4 py-2 text-[14px] ${s.default_feedback_style === v ? 'border-brand bg-brand-light/50 font-semibold' : 'border-line'}`}>
-                    <input type="radio" name="fb" className="accent-brand" checked={s.default_feedback_style === v} onChange={() => save({ default_feedback_style: v }, 'Default feedback mode')} />
+                  <label key={v} className={`flex min-h-[44px] cursor-pointer items-center gap-2 rounded-ctl border px-4 py-2 text-[14px] transition-colors ${s.default_feedback_style === v ? 'border-brand bg-brand-light/60 font-semibold' : 'border-line hover:border-brand-tint'}`}>
+                    <input type="radio" name="fb" className="h-4 w-4 accent-brand" checked={s.default_feedback_style === v} onChange={() => save({ default_feedback_style: v }, 'Default feedback mode')} />
                     {l}
                   </label>
                 ))}
@@ -114,15 +116,15 @@ export default function Settings() {
             <fieldset>
               <legend className="text-[15px] font-semibold">Default rubric option</legend>
               <p className="mt-0.5 text-[13px] text-muted">Which rubric option is selected first when you create an activity. AI drafts always need your review.</p>
-              <div className="mt-2 flex gap-3">
+              <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:gap-3">
                 {(
                   [
                     ['manual', 'Create your own rubric'],
                     ['ai', 'Generate rubric with AI'],
                   ] as const
                 ).map(([v, l]) => (
-                  <label key={v} className={`flex cursor-pointer items-center gap-2 rounded-ctl border px-4 py-2 text-[14px] ${s.default_rubric_mode === v ? 'border-brand bg-brand-light/50 font-semibold' : 'border-line'}`}>
-                    <input type="radio" name="rubric" className="accent-brand" checked={s.default_rubric_mode === v} onChange={() => save({ default_rubric_mode: v }, 'Default rubric option')} />
+                  <label key={v} className={`flex min-h-[44px] cursor-pointer items-center gap-2 rounded-ctl border px-4 py-2 text-[14px] transition-colors ${s.default_rubric_mode === v ? 'border-brand bg-brand-light/60 font-semibold' : 'border-line hover:border-brand-tint'}`}>
+                    <input type="radio" name="rubric" className="h-4 w-4 accent-brand" checked={s.default_rubric_mode === v} onChange={() => save({ default_rubric_mode: v }, 'Default rubric option')} />
                     {l}
                   </label>
                 ))}
@@ -134,15 +136,15 @@ export default function Settings() {
                 How &quot;Grade all&quot; checks a class set. Saver costs half as much but results take longer: usually within an hour, at most 24 hours. You&apos;ll see an estimate
                 and get a notification when the drafts are ready. Grade again on one paper is always fast.
               </p>
-              <div className="mt-2 flex gap-3">
+              <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:gap-3">
                 {(
                   [
                     ['fast', 'Fast (results in minutes)'],
                     ['saver', 'Saver (half price, slower)'],
                   ] as const
                 ).map(([v, l]) => (
-                  <label key={v} className={`flex cursor-pointer items-center gap-2 rounded-ctl border px-4 py-2 text-[14px] ${s.grading_mode === v ? 'border-brand bg-brand-light/50 font-semibold' : 'border-line'}`}>
-                    <input type="radio" name="grading_mode" className="accent-brand" checked={s.grading_mode === v} onChange={() => save({ grading_mode: v }, 'Grading speed')} />
+                  <label key={v} className={`flex min-h-[44px] cursor-pointer items-center gap-2 rounded-ctl border px-4 py-2 text-[14px] transition-colors ${s.grading_mode === v ? 'border-brand bg-brand-light/60 font-semibold' : 'border-line hover:border-brand-tint'}`}>
+                    <input type="radio" name="grading_mode" className="h-4 w-4 accent-brand" checked={s.grading_mode === v} onChange={() => save({ grading_mode: v }, 'Grading speed')} />
                     {l}
                   </label>
                 ))}
@@ -185,8 +187,8 @@ export default function Settings() {
 
 function Section({ title, note, children }: { title: string; note?: string; children: React.ReactNode }) {
   return (
-    <section className="card px-8 py-7" aria-label={title}>
-      <div className="flex items-baseline justify-between">
+    <section className="card px-5 py-6 sm:px-8 sm:py-7" aria-label={title}>
+      <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
         <h2 className="text-[17px] font-semibold">{title}</h2>
         {note && <span className="text-[12px] text-muted">{note}</span>}
       </div>

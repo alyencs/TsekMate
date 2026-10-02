@@ -15,7 +15,7 @@ import { Button } from '../components/ui/Button'
 import { TopBarActions } from '../components/layout/AppShell'
 import { StudentLabel } from '../components/ui/StudentLabel'
 import { Modal } from '../components/ui/Modal'
-import { ErrorState, Loading } from '../components/ui/States'
+import { ErrorState, Loading, Notice } from '../components/ui/States'
 
 type U = Unit & { edited?: boolean }
 
@@ -221,95 +221,110 @@ export default function ReviewDetail() {
   const failed = detail.status === 'failed' || detail.ai_result?.flags.includes('grading_failed')
   const label = subject === 'grammar' ? `Item ${prob.order}` : `Problem ${prob.order}`
   const shortTitle = detail.activity.title.replace(/^Solving /, '')
+  const problemNav = (
+    <nav aria-label={`${cfg.problemNoun}s`} className="scroll-x flex gap-1.5 p-0.5">
+      {detail.activity.problems.map((p) => {
+        const r = problems.find((x) => x.problem_id === p.id)
+        const sel = p.order === prob.order
+        const clean = r && !needsCheck(r, threshold) && r.suggested_score === r.max_score
+        const flag = r && needsCheck(r, threshold)
+        return (
+          <button
+            key={p.id}
+            type="button"
+            onClick={() => setProblem(p.order)}
+            aria-current={sel ? 'true' : undefined}
+            aria-label={`${cfg.problemNoun} ${p.order}${flag ? ', needs your check' : clean ? ', all correct' : ''}`}
+            className={`relative flex h-9 w-9 shrink-0 items-center justify-center rounded-ctl border text-[13px] font-semibold transition-colors ${
+              sel ? 'border-navy bg-navy text-white ring-2 ring-accent ring-offset-1' : clean ? 'border-ok-bar bg-ok-bar text-white' : 'border-line bg-white text-ink hover:border-brand-tint hover:bg-brand-light'
+            }`}
+          >
+            {p.order}
+            {flag && !sel && <span className="absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full bg-warn-bar ring-2 ring-white" aria-hidden />}
+          </button>
+        )
+      })}
+    </nav>
+  )
+  const approvedLinks = isApproved && (
+    <>
+      <Link to={`/submissions/${detail.id}/parent-message`} className="inline-flex h-9 items-center gap-1.5 whitespace-nowrap rounded-ctl border border-line bg-white px-3 text-[12px] font-semibold transition-colors hover:bg-soft">
+        <MessageSquareText className="h-3.5 w-3.5" aria-hidden /> Parent update
+      </Link>
+      <Link to={`/feedback/${detail.id}?p=${prob.order}`} className="inline-flex h-9 items-center gap-1.5 whitespace-nowrap rounded-ctl border border-line bg-white px-3 text-[12px] font-semibold transition-colors hover:bg-soft">
+        <UserRound className="h-3.5 w-3.5" aria-hidden /> Student view
+      </Link>
+    </>
+  )
+
 
   return (
     <AppShell
       active="queue"
       topbar={
         <>
-          <button onClick={back} className="flex h-10 w-10 items-center justify-center rounded-ctl border border-line hover:bg-gray-50" aria-label="Back to review queue">
-            <ArrowLeft className="h-5 w-5" />
+          <button type="button" onClick={back} className="flex h-10 w-10 shrink-0 items-center justify-center rounded-ctl border border-line transition-colors hover:bg-soft" aria-label="Back to review queue">
+            <ArrowLeft className="h-5 w-5" aria-hidden />
           </button>
-          <h1>
+          <h1 className="min-w-0 truncate max-sm:[&>span>span+span]:hidden">
             <StudentLabel id={detail.student_id} name={detail.student_name} size="lg" inline />
           </h1>
-          <span className="h-5 w-px bg-line" aria-hidden />
-          <nav aria-label={`${cfg.problemNoun}s`} className="flex gap-1.5">
-            {detail.activity.problems.map((p) => {
-              const r = problems.find((x) => x.problem_id === p.id)
-              const sel = p.order === prob.order
-              const clean = r && !needsCheck(r, threshold) && r.suggested_score === r.max_score
-              const flag = r && needsCheck(r, threshold)
-              return (
-                <button
-                  key={p.id}
-                  onClick={() => setProblem(p.order)}
-                  aria-current={sel ? 'true' : undefined}
-                  aria-label={`${cfg.problemNoun} ${p.order}${flag ? ', needs your check' : clean ? ', all correct' : ''}`}
-                  className={`relative flex h-8 w-8 items-center justify-center rounded-[6px] border text-[13px] font-semibold ${
-                    sel ? 'border-brand bg-brand text-white ring-2 ring-brand-dark ring-offset-1' : clean ? 'border-[#16A34A] bg-[#16A34A] text-white' : 'border-line bg-white text-ink hover:bg-gray-50'
-                  }`}
-                >
-                  {p.order}
-                  {flag && !sel && <span className="absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full bg-[#CA8A04]" aria-hidden />}
-                </button>
-              )
-            })}
-          </nav>
-          <span className="ml-3">
-            <SubjectChip subject={subject} size="sm" />
-          </span>
+          <span className="hidden h-5 w-px shrink-0 bg-line xl:block" aria-hidden />
+          <div className="hidden min-w-0 xl:block">{problemNav}</div>
           <div className="flex-1" />
-          {isApproved && (
-            <>
-              <Link to={`/submissions/${detail.id}/parent-message`} className="flex h-8 items-center gap-1.5 rounded-ctl border border-line px-3 text-[12px] font-semibold hover:bg-gray-50">
-                <MessageSquareText className="h-3.5 w-3.5" aria-hidden /> Parent update
-              </Link>
-              <Link to={`/feedback/${detail.id}?p=${prob.order}`} className="flex h-8 items-center gap-1.5 rounded-ctl border border-line px-3 text-[12px] font-semibold hover:bg-gray-50">
-                <UserRound className="h-3.5 w-3.5" aria-hidden /> Student view
-              </Link>
-            </>
-          )}
-          <span className="rounded border border-line bg-gray-50 px-2 py-1 text-[11px] text-muted">{AI_LABEL}</span>
+          <div className="hidden items-center gap-2 2xl:flex">{approvedLinks}</div>
           <TopBarActions />
         </>
       }
     >
-      <div className="grid grid-cols-[minmax(0,496px)_minmax(0,1fr)] gap-8">
-        <div className="sticky top-[96px] self-start">
+      <div className="mb-4 flex flex-col gap-3 sm:mb-5 xl:flex-row xl:items-center xl:justify-between">
+        <div className="flex min-w-0 items-center gap-3 xl:hidden">
+          <span className="label-caps shrink-0">{cfg.problemNoun}s</span>
+          <div className="min-w-0">{problemNav}</div>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <SubjectChip subject={subject} size="sm" />
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-line bg-white px-2.5 py-1 text-[11px] font-medium text-muted">
+            <Sparkles className="h-3 w-3 text-accent" aria-hidden /> {AI_LABEL}
+          </span>
+          <span className="flex flex-wrap gap-2 2xl:hidden">{approvedLinks}</span>
+        </div>
+      </div>
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-[minmax(0,420px)_minmax(0,1fr)] lg:gap-6 xl:grid-cols-[minmax(0,480px)_minmax(0,1fr)] xl:gap-8">
+        <div className="mx-auto w-full max-w-[520px] self-start lg:sticky lg:top-[88px] lg:max-w-none">
           <ImageViewer url={detail.image_url} deleted={detail.image_deleted} units={units} studentId={detail.student_name ?? detail.student_id ?? 'an unidentified student'} />
-          <p className="mt-6 text-center text-[11px] uppercase tracking-[0.12em] text-muted">
+          <p className="mt-3 text-center text-[11px] uppercase tracking-[0.12em] text-muted lg:mt-5">
             Student submission: {shortTitle}, {label}
           </p>
         </div>
 
         <div className="flex min-w-0 flex-col gap-4">
           <IdentityBar detail={detail} onAssign={assign} />
-          <section className="card px-6 py-6">
+          <section className="card px-4 py-5 sm:px-6 sm:py-6">
             {subject === 'grammar' ? (
               <>
                 <p className="label-caps">Item {prob.order}: Correct the sentence</p>
-                <h2 className="mt-1.5 text-[19px] font-bold leading-snug">&quot;{prob.text}&quot;</h2>
-                <p className="mt-1.5 text-[15px] text-[#16A34A]">Expected: &quot;{prob.expected_answer}&quot;</p>
+                <h2 className="mt-1.5 text-[17px] font-bold leading-snug sm:text-[19px]">&quot;{prob.text}&quot;</h2>
+                <p className="mt-1.5 text-[14px] font-medium text-ok-text sm:text-[15px]">Expected: &quot;{prob.expected_answer}&quot;</p>
                 {result?.student_answer && (
-                  <div className="mt-4 rounded-card border border-line bg-[#F9F7F5] px-4 py-4">
+                  <div className="mt-4 rounded-card border border-line bg-soft px-4 py-4">
                     <p className="label-caps">Student answer (transcribed)</p>
-                    <p className="mt-2 font-mono text-[15px] italic leading-relaxed">&quot;{result.student_answer}&quot;</p>
+                    <p className="mt-2 break-words font-mono text-[14px] italic leading-relaxed sm:text-[15px]">&quot;{result.student_answer}&quot;</p>
                   </div>
                 )}
               </>
             ) : (
               <>
-                <h2 className="text-[20px] font-bold leading-snug">
+                <h2 className="text-[17px] font-bold leading-snug sm:text-[20px]">
                   {label}: {prob.text}
                 </h2>
-                <p className="mt-1.5 text-[15px] text-[#16A34A]">Expected answer: {prob.expected_answer}</p>
+                <p className="mt-1.5 text-[14px] font-medium text-ok-text sm:text-[15px]">Expected answer: {prob.expected_answer}</p>
               </>
             )}
           </section>
 
           {failed ? (
-            <div role="alert" className="card flex gap-3 border-bad-border bg-bad-bg px-6 py-5 text-bad-text">
+            <div role="alert" className="card flex gap-3 border-bad-border bg-bad-bg px-4 py-5 text-bad-text sm:px-6">
               <CircleAlert className="mt-0.5 h-5 w-5 shrink-0" aria-hidden />
               <div>
                 <p className="font-semibold">TsekMate could not grade this paper automatically.</p>
@@ -326,27 +341,31 @@ export default function ReviewDetail() {
 
           <RubricBreakdown rows={rows} total={finalScore} max={maxScore} label={label} onChange={setCriterion} />
 
-          <section className="card mt-4 px-8 py-8 shadow-pop" aria-label="Score and approval">
-            <div className="grid grid-cols-2 gap-6">
-              <div>
-                <p className="label-caps tracking-[0.12em]">Suggested score</p>
-                <p className="mt-2 text-[38px] font-bold leading-none">
-                  {fmtScore(result?.ai_suggested_score ?? 0)} <span className="text-[20px] font-medium text-gray-400">/ {fmtScore(maxScore)}</span>
+          <section className="card mt-2 overflow-hidden shadow-pop" aria-label="Score and approval">
+            <div className="flex items-center gap-2 border-b border-line bg-soft px-5 py-3 text-[13px] font-medium text-navy sm:px-8">
+              <UserRound className="h-4 w-4 text-accent" aria-hidden /> You decide the final grade. The AI only suggests.
+            </div>
+            <div className="px-5 py-6 sm:px-8 sm:py-8">
+            <div className="grid grid-cols-2 gap-4 sm:gap-6">
+              <div className="rounded-ctl border border-line bg-soft/60 p-3 sm:border-0 sm:bg-transparent sm:p-0">
+                <p className="label-caps tracking-[0.12em]">AI suggested</p>
+                <p className="mt-2 text-[28px] font-bold leading-none text-[#3B4260] sm:text-[38px]">
+                  {fmtScore(result?.ai_suggested_score ?? 0)} <span className="text-[15px] font-medium text-muted sm:text-[20px]">/ {fmtScore(maxScore)}</span>
                 </p>
               </div>
-              <div>
+              <div className="rounded-ctl border border-accent-tint bg-accent-light p-3 sm:border-0 sm:bg-transparent sm:p-0">
                 <p className="label-caps tracking-[0.12em] text-muted">Your final score</p>
-                <p className="mt-2 flex items-center gap-3 text-[38px] font-bold leading-none text-brand" aria-live="polite">
+                <p className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[28px] font-bold leading-none text-navy sm:text-[38px]" aria-live="polite">
                   <span>
-                    {fmtScore(finalScore)} <span className="text-[20px] font-medium text-gray-400">/ {fmtScore(maxScore)}</span>
+                    {fmtScore(finalScore)} <span className="text-[15px] font-medium text-muted sm:text-[20px]">/ {fmtScore(maxScore)}</span>
                   </span>
-                  {problemEdited && <span className="rounded bg-brand-light px-2 py-1 text-[11px] font-semibold text-brand-dark">Edited by you</span>}
+                  {problemEdited && <span className="rounded bg-accent-strong px-2 py-1 text-[11px] font-semibold text-white">Edited by you</span>}
                 </p>
                 <p className="mt-2 text-[12px] text-muted">The sum of the rubric breakdown above.</p>
               </div>
             </div>
 
-            <label htmlFor="feedback" className="label-caps mt-8 block tracking-[0.12em]">
+            <label htmlFor="feedback" className="label-caps mt-6 block tracking-[0.12em] sm:mt-8">
               Feedback to student
             </label>
             <div className="relative mt-3">
@@ -358,23 +377,23 @@ export default function ReviewDetail() {
                   setFeedback((f) => ({ ...f, [prob.id]: e.target.value }))
                   setDirty(true)
                 }}
-                className="field-soft min-h-[94px] resize-y py-3 pb-10"
+                className="field-soft min-h-[110px] resize-y py-3 pb-11"
               />
-              <span className="absolute bottom-3 right-3 rounded border border-line bg-white px-2 py-1 text-[11px] font-semibold text-muted">
+              <span className="pointer-events-none absolute bottom-3 right-3 rounded border border-line bg-white px-2 py-1 text-[11px] font-semibold text-muted">
                 {detail.activity.settings.feedback_style === 'hint_only' ? 'Hint only mode' : 'Full solution mode'}
               </span>
             </div>
 
             <hr className="my-6 border-line" />
             {notice && (
-              <p role={notice.tone === 'bad' ? 'alert' : 'status'} className={`mb-4 rounded-ctl border px-3 py-2 text-[14px] ${notice.tone === 'bad' ? 'border-bad-border bg-bad-bg text-bad-text' : 'border-ok-border bg-ok-bg text-ok-text'}`}>
+              <Notice tone={notice.tone} className="mb-4">
                 {notice.text}
-              </p>
+              </Notice>
             )}
-            <div className="flex items-center gap-4">
+            <div className="flex flex-wrap items-center gap-3 sm:flex-nowrap sm:gap-4">
               <Button
                 size="lg"
-                className="flex-1 shadow-md"
+                className="w-full sm:w-auto sm:flex-1"
                 onClick={approve}
                 loading={saving === 'approve'}
                 disabled={saving !== null || !detail.student_id || invalidRows.length > 0}
@@ -382,11 +401,12 @@ export default function ReviewDetail() {
               >
                 {isApproved ? 'Save and re-approve' : 'Approve and save'}
               </Button>
-              <Button size="lg" variant="secondary" className="w-36" onClick={saveDraft} loading={saving === 'draft'} disabled={saving !== null || !dirty}>
+              <Button size="lg" variant="secondary" className="flex-1 sm:w-36 sm:flex-none" onClick={saveDraft} loading={saving === 'draft'} disabled={saving !== null || !dirty}>
                 Save draft
               </Button>
               <button
-                className="flex h-14 w-12 items-center justify-center rounded-ctl text-gray-500 hover:bg-gray-100"
+                type="button"
+                className="flex h-12 w-12 shrink-0 items-center justify-center rounded-ctl border border-line text-muted transition-colors hover:bg-soft hover:text-ink"
                 title="Leave flagged and go to the next paper"
                 aria-label="Leave this paper flagged and go to the next paper"
                 onClick={() => (detail.next_submission ? confirmLeave() && navigate(`/submissions/${detail.next_submission.id}`) : back())}
@@ -401,35 +421,36 @@ export default function ReviewDetail() {
               <Sparkles className="h-3.5 w-3.5 shrink-0 text-brand" aria-hidden />
               {isApproved && detail.review.approved_at
                 ? `Approved by you ${timeAgo(detail.review.approved_at)}. You can still change scores and re-approve.`
-                : 'AI-assisted draft — Review the suggested score before approving.'}
+                : 'AI-assisted draft. Review the suggested score before approving.'}
             </p>
+            </div>
           </section>
         </div>
       </div>
 
-      <Modal open={!!approved} onClose={back} labelledBy="approved-title" className="w-[500px] px-12 pb-10 pt-12 text-center">
+      <Modal open={!!approved} onClose={back} labelledBy="approved-title" className="max-w-[500px] px-6 pb-8 pt-10 text-center sm:px-12 sm:pb-10 sm:pt-12">
         <span className="animate-check mx-auto flex h-24 w-24 items-center justify-center rounded-full bg-ok-bg" aria-hidden>
           <span className="flex h-20 w-20 items-center justify-center rounded-full bg-[#16A34A]">
             <span className="flex h-7 w-7 items-center justify-center rounded-full bg-white">
-              <Check className="h-4 w-4 text-[#16A34A]" strokeWidth={3} />
+              <Check className="h-4 w-4 text-[#15803D]" strokeWidth={3} />
             </span>
           </span>
         </span>
-        <h2 id="approved-title" className="mt-6 text-[30px] font-bold">
+        <h2 id="approved-title" className="mt-6 text-[24px] font-bold sm:text-[30px]">
           Approved and saved
         </h2>
-        <div className="mt-5 rounded-card border border-line bg-[#F9F7F5] px-6 py-6">
-          <p className="text-[18px] leading-relaxed">
+        <div className="mt-5 rounded-card border border-line bg-soft px-4 py-5 sm:px-6 sm:py-6">
+          <p className="text-[16px] leading-relaxed sm:text-[18px]">
             <b>{detail.student_name ?? detail.student_id}</b> scored{' '}
-            <b className="text-[#16A34A]">
+            <b className="text-[#15803D]">
               {fmtScore(approved?.total)} / {fmtScore(approved?.max)}
             </b>{' '}
             on <b className="italic">{detail.activity.title}</b>.
           </p>
-          <p className="mx-auto mt-4 w-fit rounded-full border border-line bg-white px-3 py-1 text-[12px] text-muted">The grade is now in the gradebook.</p>
+          <p className="mx-auto mt-4 w-fit rounded-full border border-line bg-white px-3 py-1 text-[12px] text-muted">Approved by you. The grade is now in the gradebook.</p>
         </div>
         {detail.next_submission && (
-          <Button size="lg" className="mt-8 w-full" iconRight={<ArrowRight className="h-4 w-4" aria-hidden />} onClick={() => navigate(`/submissions/${detail.next_submission!.id}`)}>
+          <Button size="lg" className="mt-8 w-full whitespace-normal" iconRight={<ArrowRight className="h-4 w-4" aria-hidden />} onClick={() => navigate(`/submissions/${detail.next_submission!.id}`)}>
             Next paper ({detail.next_submission.student_name ?? 'not identified'})
           </Button>
         )}
@@ -460,12 +481,12 @@ function UnitCard({ unit: u, position, units, subject, onEdit }: { unit: U; posi
   const isCorrection = subject === 'grammar' && ['finds the errors'].includes(u.criterion.toLowerCase())
   const name = unitLabel(subject, u, position, units)
   const frame = err ? 'border-bad-border' : unclear ? 'border-line border-l-4 border-l-[#CA8A04]' : 'border-line'
-  const head = err ? 'bg-bad-bg/60' : unclear ? 'bg-warn-bg/50' : 'bg-[#FCFBFA]'
+  const head = err ? 'bg-bad-bg/60' : unclear ? 'bg-warn-bg/50' : 'bg-soft/60'
   const id = `unit-${u.index}`
 
   return (
     <article id={id} className={`card overflow-hidden ${frame}`} aria-label={`${name}: ${u.verdict}`}>
-      <header className={`flex items-center gap-2 border-b border-line px-4 py-4 ${head}`}>
+      <header className={`flex flex-wrap items-center gap-2 border-b border-line px-4 py-3 sm:py-4 ${head}`}>
         <h3 className="text-[13px] font-semibold uppercase tracking-wide text-muted">{name}</h3>
         {u.verdict === 'correct' && (
           <Badge tone="ok" icon={<Check className="h-3 w-3" aria-hidden />}>
@@ -487,14 +508,15 @@ function UnitCard({ unit: u, position, units, subject, onEdit }: { unit: U; posi
             <Badge tone="warn" icon={<CircleAlert className="h-3 w-3" aria-hidden />}>
               Unclear
             </Badge>
-            <span className="rounded border border-[#CA8A04] bg-white px-2 py-0.5 text-[11px] font-semibold text-warn-text">Needs your check</span>
+            <span className="rounded border border-[#D9A21B] bg-white px-2 py-0.5 text-[11px] font-semibold text-warn-text">Needs your check</span>
           </>
         )}
         {u.edited && <span className="rounded bg-brand-light px-1.5 py-0.5 text-[10px] font-semibold text-brand-dark">Edited</span>}
-        <span className="ml-auto flex items-center gap-4">
+        <span className="ml-auto flex items-center gap-3 sm:gap-4">
           <ConfidenceBar value={u.confidence} width="w-16" />
           <button
-            className="text-[13px] font-semibold text-brand-dark hover:underline"
+            type="button"
+            className="rounded px-1.5 py-1 text-[13px] font-semibold text-brand-dark hover:bg-brand-light"
             aria-expanded={editing}
             onClick={() => {
               setDraft({ transcribed_text: u.transcribed_text, verdict: u.verdict, error_type: u.error_type, comment: u.comment })
@@ -507,8 +529,8 @@ function UnitCard({ unit: u, position, units, subject, onEdit }: { unit: U; posi
       </header>
 
       {editing ? (
-        <div className="grid grid-cols-2 gap-4 px-6 py-5">
-          <label className="col-span-2 text-[12px] font-semibold text-muted">
+        <div className="grid grid-cols-1 gap-4 px-4 py-5 sm:grid-cols-2 sm:px-6">
+          <label className="text-[12px] font-semibold text-muted sm:col-span-2">
             Transcription
             <textarea className="field-soft mt-1 h-auto py-2 font-mono text-[14px]" rows={2} value={draft.transcribed_text ?? ''} onChange={(e) => setDraft({ ...draft, transcribed_text: e.target.value })} />
           </label>
@@ -531,16 +553,17 @@ function UnitCard({ unit: u, position, units, subject, onEdit }: { unit: U; posi
               ))}
             </select>
           </label>
-          <label className="col-span-2 text-[12px] font-semibold text-muted">
+          <label className="text-[12px] font-semibold text-muted sm:col-span-2">
             Comment (describe the work, not the student)
             <input className="field mt-1" value={draft.comment ?? ''} onChange={(e) => setDraft({ ...draft, comment: e.target.value })} />
           </label>
-          <div className="col-span-2 flex justify-end gap-2">
+          <div className="flex justify-end gap-2 sm:col-span-2">
             <Button variant="secondary" size="sm" onClick={() => setEditing(false)}>
               Cancel
             </Button>
             <Button
               size="sm"
+              variant="dark"
               onClick={() => {
                 const patch: UnitEdit = {}
                 ;(Object.keys(draft) as (keyof UnitEdit)[]).forEach((k) => {
@@ -555,17 +578,17 @@ function UnitCard({ unit: u, position, units, subject, onEdit }: { unit: U; posi
           </div>
         </div>
       ) : (
-        <div className="px-6 py-6">
+        <div className="px-4 py-5 sm:px-6 sm:py-6">
           {isCorrection ? (
             <p className="text-[16px] font-semibold">{u.transcribed_text}</p>
           ) : (
-            <div className="rounded-ctl border border-line bg-[#F9F7F5] px-3 py-3 font-mono text-[15px]">{u.transcribed_text}</div>
+            <div className="break-words rounded-ctl border border-line bg-soft px-3 py-3 font-mono text-[14px] sm:text-[15px]">{u.transcribed_text}</div>
           )}
           {u.alt_reading && <p className="mt-2 text-[12px] text-warn-text">Other possible reading: {u.alt_reading}</p>}
           <div className="mt-5 flex items-end justify-between gap-4">
             <div className="min-w-0">
               <p className="text-[11px] font-semibold uppercase tracking-wide text-muted">Criterion: {u.criterion}</p>
-              {u.comment && <p className={`mt-1 text-[13px] ${err ? 'text-bad-strong' : unclear ? 'text-[#CA8A04]' : 'italic text-gray-600'}`}>{u.verdict === 'correct' ? `"${u.comment}"` : u.comment}</p>}
+              {u.comment && <p className={`mt-1 text-[13px] ${err ? 'text-bad-strong' : unclear ? 'text-[#A16207]' : 'italic text-muted'}`}>{u.verdict === 'correct' ? `"${u.comment}"` : u.comment}</p>}
             </div>
           </div>
         </div>
@@ -600,10 +623,10 @@ function ImageViewer({ url, deleted, units, studentId }: { url: string | null; d
         <p className="max-w-[260px] text-[14px]">{deleted ? 'The photo was deleted after approval (privacy setting). Scores and feedback are kept.' : 'No photo for this paper.'}</p>
       </div>
     )
-  const color = (v: string) => (v === 'error' ? '#DC2626' : v === 'unclear' ? '#F97316' : '#16A34A')
+  const color = (v: string) => (v === 'error' ? '#DC2626' : v === 'unclear' ? '#CA8A04' : '#16A34A')
   return (
-    <div className="relative overflow-hidden rounded-2xl border border-line bg-gray-100 shadow-pop">
-      <div ref={box} className="aspect-[3/4] overflow-auto">
+    <div className="relative overflow-hidden rounded-2xl border border-line bg-[#E9EDF5] shadow-pop">
+      <div ref={box} className="aspect-[3/4] max-h-[72vh] overflow-auto lg:max-h-none">
         <div className="relative origin-top-left transition-transform" style={{ width: `${zoom * 100}%`, transform: rot ? `rotate(${rot}deg)` : undefined, transformOrigin: 'center' }}>
           <img src={url} alt={`Photo of ${studentId}'s handwritten work`} className="block w-full select-none" draggable={false} />
           {boxes.map((u) => (
@@ -617,16 +640,16 @@ function ImageViewer({ url, deleted, units, studentId }: { url: string | null; d
           ))}
         </div>
       </div>
-      <div className="absolute bottom-6 left-1/2 flex -translate-x-1/2 items-center gap-1 rounded-full border border-line bg-white px-5 py-2.5 shadow-pop">
-        <button className="rounded-full p-2 hover:bg-gray-100" aria-label="Zoom in" onClick={() => setZoom((z) => Math.min(3, z + 0.5))}>
-          <ZoomIn className="h-4 w-4" />
+      <div className="absolute bottom-4 left-1/2 flex -translate-x-1/2 items-center gap-1 rounded-full border border-line bg-white/95 px-3 py-1.5 shadow-pop sm:bottom-6 sm:px-4 sm:py-2">
+        <button type="button" className="flex h-10 w-10 items-center justify-center rounded-full transition-colors hover:bg-soft" aria-label="Zoom in" onClick={() => setZoom((z) => Math.min(3, z + 0.5))}>
+          <ZoomIn className="h-4 w-4" aria-hidden />
         </button>
-        <button className="rounded-full p-2 hover:bg-gray-100" aria-label="Zoom out" onClick={() => setZoom((z) => Math.max(1, z - 0.5))}>
-          <ZoomOut className="h-4 w-4" />
+        <button type="button" className="flex h-10 w-10 items-center justify-center rounded-full transition-colors hover:bg-soft" aria-label="Zoom out" onClick={() => setZoom((z) => Math.max(1, z - 0.5))}>
+          <ZoomOut className="h-4 w-4" aria-hidden />
         </button>
         <span className="mx-2 h-5 w-px bg-line" aria-hidden />
-        <button className="rounded-full p-2 hover:bg-gray-100" aria-label="Rotate" onClick={() => setRot((r) => (r + 90) % 360)}>
-          <RotateCcw className="h-4 w-4" />
+        <button type="button" className="flex h-10 w-10 items-center justify-center rounded-full transition-colors hover:bg-soft" aria-label="Rotate" onClick={() => setRot((r) => (r + 90) % 360)}>
+          <RotateCcw className="h-4 w-4" aria-hidden />
         </button>
       </div>
     </div>
@@ -637,7 +660,7 @@ function ImageViewer({ url, deleted, units, studentId }: { url: string | null; d
 function RubricBreakdown({ rows, total, max, label, onChange }: { rows: Row[]; total: number; max: number; label: string; onChange: (name: string, v: number | null) => void }) {
   return (
     <section className="card overflow-hidden" aria-labelledby="breakdown-title">
-      <div className="flex items-baseline justify-between px-6 pt-5">
+      <div className="flex flex-col gap-1 px-4 pt-5 sm:flex-row sm:items-baseline sm:justify-between sm:px-6">
         <h3 id="breakdown-title" className="label-caps">
           Rubric breakdown · {label}
         </h3>
@@ -645,10 +668,10 @@ function RubricBreakdown({ rows, total, max, label, onChange }: { rows: Row[]; t
       </div>
       <table className="mt-3 w-full text-left">
         <thead>
-          <tr className="border-y border-line bg-[#F9F7F5] text-[11px] font-semibold uppercase tracking-[0.08em] text-muted">
-            <th scope="col" className="px-6 py-2.5">Criterion</th>
-            <th scope="col" className="w-[90px] px-2 py-2.5 text-right">AI points</th>
-            <th scope="col" className="w-[150px] px-6 py-2.5 text-right">Score</th>
+          <tr className="border-y border-line bg-soft text-[11px] font-semibold uppercase tracking-[0.08em] text-muted">
+            <th scope="col" className="px-4 py-2.5 sm:px-6">Criterion</th>
+            <th scope="col" className="hidden w-[90px] px-2 py-2.5 text-right sm:table-cell">AI points</th>
+            <th scope="col" className="w-[120px] px-4 py-2.5 text-right sm:w-[150px] sm:px-6">Your score</th>
           </tr>
         </thead>
         <tbody>
@@ -656,14 +679,15 @@ function RubricBreakdown({ rows, total, max, label, onChange }: { rows: Row[]; t
             const id = `crit-${c.name.replace(/\W+/g, '-')}`
             return (
               <tr key={c.name} className={`border-b border-line align-top ${c.assessed || c.edited ? '' : 'bg-warn-bg/40'}`}>
-                <td className="px-6 py-3">
-                  <label htmlFor={id} className="text-[15px] font-semibold">
+                <td className="px-4 py-3 sm:px-6">
+                  <label htmlFor={id} className="text-[14px] font-semibold sm:text-[15px]">
                     {c.name}
                   </label>
-                  {c.description && <p className="text-[13px] text-gray-600">{c.description}</p>}
+                  {c.description && <p className="text-[13px] text-muted">{c.description}</p>}
+                  <p className="mt-0.5 text-[12px] text-muted sm:hidden">AI points: {c.assessed ? fmtScore(c.computed) : '—'}</p>
                   <p className="mt-1 flex flex-wrap gap-1.5">
                     {!c.assessed && !c.edited && (
-                      <span className="rounded border border-[#CA8A04] bg-white px-1.5 py-0.5 text-[11px] font-semibold text-warn-text">Not scored by the AI · please score it</span>
+                      <span className="rounded border border-[#D9A21B] bg-white px-1.5 py-0.5 text-[11px] font-semibold text-warn-text">Not scored by the AI · please score it</span>
                     )}
                     {c.edited && <span className="rounded bg-brand-light px-1.5 py-0.5 text-[11px] font-semibold text-brand-dark">Edited</span>}
                   </p>
@@ -673,8 +697,8 @@ function RubricBreakdown({ rows, total, max, label, onChange }: { rows: Row[]; t
                     </p>
                   )}
                 </td>
-                <td className="px-2 py-3 text-right text-[14px] text-muted">{c.assessed ? fmtScore(c.computed) : '—'}</td>
-                <td className="px-6 py-3 text-right">
+                <td className="hidden px-2 py-3 text-right text-[14px] text-muted sm:table-cell">{c.assessed ? fmtScore(c.computed) : '—'}</td>
+                <td className="px-4 py-3 text-right sm:px-6">
                   <span className="inline-flex items-center gap-1.5 text-[14px] text-muted">
                     <ScoreInput
                       id={id}
@@ -691,11 +715,12 @@ function RubricBreakdown({ rows, total, max, label, onChange }: { rows: Row[]; t
               </tr>
             )
           })}
-          <tr className="bg-[#F9F7F5]">
-            <td colSpan={2} className="px-6 py-3 text-right text-[12px] font-semibold uppercase tracking-wider text-muted">
+          <tr className="bg-soft">
+            <td className="hidden sm:table-cell" />
+            <td className="px-4 py-3 text-right text-[12px] font-semibold uppercase tracking-wider text-muted sm:px-6">
               Total
             </td>
-            <td className="px-6 py-3 text-right text-[17px] font-bold text-brand">
+            <td className="whitespace-nowrap px-4 py-3 text-right text-[17px] font-bold text-navy sm:px-6">
               {fmtScore(total)} / {fmtScore(max)}
             </td>
           </tr>
@@ -775,7 +800,7 @@ function ScoreInput({ id, value, aiValue, max, invalid, describedBy, onCommit }:
         }}
         aria-invalid={invalid || undefined}
         aria-describedby={hint ? `${describedBy} ${id}-hint` : describedBy}
-        className={`h-9 w-16 rounded-[6px] border bg-white text-center text-[15px] font-semibold text-ink focus:outline-none focus:ring-2 ${
+        className={`h-10 w-14 rounded-ctl border bg-white text-center text-[15px] font-semibold text-ink focus:outline-none focus:ring-2 sm:w-16 ${
           invalid ? 'border-bad-strong focus:ring-bad-strong/20' : 'border-line focus:border-brand focus:ring-brand/20'
         }`}
       />
@@ -808,7 +833,7 @@ function IdentityBar({ detail, onAssign }: { detail: SubmissionDetail; onAssign:
         {how ?? 'Student'}
         {read && <span>· paper says &quot;{read}&quot;</span>}
         {!approved && (
-          <button className="ml-1 font-semibold text-brand-dark hover:underline" onClick={() => setChanging(true)}>
+          <button type="button" className="ml-1 rounded font-semibold text-brand-dark hover:underline" onClick={() => setChanging(true)}>
             Change student
           </button>
         )}
@@ -816,19 +841,19 @@ function IdentityBar({ detail, onAssign }: { detail: SubmissionDetail; onAssign:
     )
   const options = detail.roster.filter((r) => !r.has_paper)
   return (
-    <section className="animate-fade card border-warn-border bg-warn-bg/40 px-5 py-4" aria-label="Student identity">
+    <section className="animate-fade card border-warn-border bg-warn-bg/40 px-4 py-4 sm:px-5" aria-label="Student identity">
       <div className="flex items-start gap-3">
         <UserRoundX className="mt-0.5 h-5 w-5 shrink-0 text-warn-text" aria-hidden />
         <div className="min-w-0 flex-1">
           <p className="text-[15px] font-semibold text-warn-text">{detail.student_id ? 'Change the student for this paper' : 'Student: Not identified'}</p>
-          <p className="mt-0.5 text-[13px] text-gray-700">
+          <p className="mt-0.5 text-[13px] text-[#3B4260]">
             {id.reason ?? 'TsekMate could not match this paper to the class roster.'} {read && `The paper says "${read}".`} Grading is not affected.
           </p>
           <div className="mt-3 flex flex-wrap items-center gap-2">
             <label className="sr-only" htmlFor="assign-student">
               Student
             </label>
-            <select id="assign-student" className="field h-9 w-auto min-w-[260px] text-[14px]" value={choice} onChange={(e) => setChoice(e.target.value)}>
+            <select id="assign-student" className="field h-10 w-full text-[14px] sm:w-auto sm:min-w-[260px]" value={choice} onChange={(e) => setChoice(e.target.value)}>
               <option value="">Choose a student from {detail.activity.class_name}…</option>
               {options.map((r) => (
                 <option key={r.id} value={r.id}>
@@ -837,11 +862,11 @@ function IdentityBar({ detail, onAssign }: { detail: SubmissionDetail; onAssign:
                 </option>
               ))}
             </select>
-            <Button size="sm" className="h-9" disabled={!choice} onClick={() => onAssign(choice)}>
+            <Button size="sm" variant="dark" className="h-10" disabled={!choice} onClick={() => onAssign(choice)}>
               Assign
             </Button>
             {detail.student_id && (
-              <Button size="sm" variant="ghost" className="h-9" onClick={() => setChanging(false)}>
+              <Button size="sm" variant="ghost" className="h-10" onClick={() => setChanging(false)}>
                 Cancel
               </Button>
             )}

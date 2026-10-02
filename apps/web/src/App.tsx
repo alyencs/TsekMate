@@ -18,6 +18,7 @@ const ParentUpdate = lazy(() => import('./pages/ParentUpdate'))
 const StudentFeedback = lazy(() => import('./pages/StudentFeedback'))
 const Profile = lazy(() => import('./pages/Profile'))
 const Settings = lazy(() => import('./pages/Settings'))
+const Notifications = lazy(() => import('./pages/Notifications'))
 
 function RequireTeacher({ children }: { children: ReactNode }) {
   const loc = useLocation()
@@ -46,6 +47,7 @@ export default function App() {
         <Route path="/feedback/:id" element={guard(<StudentFeedback />)} />
         <Route path="/profile" element={guard(<Profile />)} />
         <Route path="/settings" element={guard(<Settings />)} />
+        <Route path="/notifications" element={guard(<Notifications />)} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </Suspense>

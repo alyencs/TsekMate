@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
-import { BellRing, CircleCheck, CircleX, Clock, Hourglass, Loader2, Sparkles } from 'lucide-react'
+import { BellRing, CircleCheck, CircleX, Clock, Hourglass, Loader2, Sparkles, UserRoundCheck } from 'lucide-react'
+import { LogoMark } from '../components/ui/Logo'
 import { api } from '../lib/api'
 import { clockTime, duration } from '../lib/format'
 import type { GradingProgress, SaverStatus } from '../lib/types'
@@ -81,49 +82,50 @@ export default function Grading() {
   const saver = prog?.saver ?? null
 
   return (
-    <AppShell active="queue" contentClassName="flex items-start justify-center px-8 py-[140px]">
+    <AppShell active="queue" contentClassName="flex items-start justify-center px-4 py-8 sm:px-8 sm:py-16 lg:py-24">
       {error && !prog ? (
         <ErrorState message={error} />
       ) : (
-        <section className="relative w-full max-w-[598px] rounded-2xl border border-line bg-white px-10 pb-10 pt-20 text-center shadow-pop">
-          <Sparkles className="absolute right-6 top-4 h-12 w-12 text-brand-tint/70" aria-hidden />
-          <span className="mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-brand-light text-brand" aria-hidden>
-            <Sparkles className="h-8 w-8" />
+        <section className="relative w-full max-w-[600px] overflow-hidden rounded-2xl border border-line bg-white px-5 pb-8 pt-12 text-center shadow-pop sm:px-10 sm:pb-10 sm:pt-16">
+          <Sparkles className="absolute right-5 top-4 h-10 w-10 text-accent/30" aria-hidden />
+          <span className="relative mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-brand-light" aria-hidden>
+            {prog?.running && <span className="absolute inset-0 animate-spin rounded-full border-[3px] border-transparent border-t-brand" />}
+            <LogoMark size={40} />
           </span>
-          <h1 className="mt-6 text-[24px] font-bold">
+          <h1 className="mt-6 text-[20px] font-bold sm:text-[24px]">
             {total === 0 ? 'Nothing to check' : returnTo ? 'Grading this paper again' : `TsekMate is checking ${total} paper${total === 1 ? '' : 's'}`}
           </h1>
-          <p className="mt-3 text-[15px] text-muted">Our AI is analyzing every step of the students&apos; work against your rubric.</p>
+          <p className="mt-2 text-[14px] text-muted sm:text-[15px]">TsekMate is checking every step of the students&apos; work against your rubric.</p>
           {saver && <SaverNotice saver={saver} />}
 
-          <div className="mt-10 flex items-center justify-between text-[15px]">
+          <div className="mt-8 flex items-center justify-between text-[14px] sm:mt-10 sm:text-[15px]">
             <span className="font-semibold" aria-live="polite" aria-atomic="true">
               {done} of {total} done
             </span>
             <span className="font-semibold text-brand">{pct}%</span>
           </div>
-          <div className="mt-4 h-4 overflow-hidden rounded-full border border-line bg-gray-100" role="progressbar" aria-valuemin={0} aria-valuemax={total} aria-valuenow={done} aria-label="Grading progress">
-            <div className="h-full rounded-full bg-brand transition-all duration-500" style={{ width: `${pct}%` }} />
+          <div className="mt-3 h-3 overflow-hidden rounded-full bg-[#E9EDF5]" role="progressbar" aria-valuemin={0} aria-valuemax={total} aria-valuenow={done} aria-label="Grading progress">
+            <div className="h-full rounded-full bg-gradient-to-r from-brand to-sky transition-all duration-500" style={{ width: `${pct}%` }} />
           </div>
 
           {windowed.length > 0 && (
-            <ul className="mt-10 overflow-hidden rounded-card border border-line text-left">
+            <ul className="mt-8 overflow-hidden rounded-card border border-line text-left sm:mt-10">
               {windowed.map((i) => (
-                <li key={i.submission_id} className={`animate-fade flex items-center gap-3 border-b border-line px-6 py-4 transition-colors last:border-0 ${i.state === 'checking' ? 'bg-[#FFFBF7]' : i.state === 'waiting' ? 'text-gray-400' : ''}`}>
-                  <span className="flex-1 text-[15px]">{i.student_name ?? (i.state === 'done' || i.state === 'failed' ? 'Student not identified' : 'Reading name…')}</span>
+                <li key={i.submission_id} className={`animate-fade flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-line px-4 py-3 sm:px-6 sm:py-4 transition-colors last:border-0 ${i.state === 'checking' ? 'bg-rowhover' : i.state === 'waiting' ? 'text-[#8790A6]' : ''}`}>
+                  <span className="min-w-0 flex-1 truncate text-[14px] sm:text-[15px]">{i.student_name ?? (i.state === 'done' || i.state === 'failed' ? 'Student not identified' : 'Reading name…')}</span>
                   <span className="text-[13px] tabular-nums text-muted">{i.student_id ?? short}</span>
                   {i.state === 'done' && (
-                    <span className="flex items-center gap-1.5 text-[15px] font-semibold text-[#16A34A]">
-                      <CircleCheck className="h-4 w-4 fill-[#16A34A] text-white" aria-hidden /> Done
+                    <span className="flex items-center gap-1.5 text-[14px] font-semibold text-ok-text">
+                      <CircleCheck className="h-4 w-4 fill-ok-bar text-white" aria-hidden /> Done
                     </span>
                   )}
                   {i.state === 'checking' && (
-                    <span className="flex items-center gap-1.5 text-[15px] font-semibold text-brand">
+                    <span className="flex items-center gap-1.5 text-[14px] font-semibold text-brand">
                       <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> Checking...
                     </span>
                   )}
                   {i.state === 'waiting' && (
-                    <span className="flex items-center gap-1.5 text-[15px] font-semibold">
+                    <span className="flex items-center gap-1.5 text-[14px] font-semibold">
                       <Hourglass className="h-4 w-4" aria-hidden /> Waiting
                     </span>
                   )}
@@ -133,7 +135,7 @@ export default function Grading() {
                     </span>
                   )}
                   {i.state === 'failed' && (
-                    <span className="flex items-center gap-1.5 text-[15px] font-semibold text-bad-strong">
+                    <span className="flex items-center gap-1.5 text-[14px] font-semibold text-bad-text">
                       <CircleX className="h-4 w-4" aria-hidden /> Needs teacher
                     </span>
                   )}
@@ -167,7 +169,9 @@ export default function Grading() {
               Go to the review queue
             </Button>
           )}
-          <p className="mt-10 text-[12px] italic text-gray-400">You will review every result before anything is saved.</p>
+          <p className="mt-8 flex items-center justify-center gap-1.5 text-[13px] font-medium text-navy sm:mt-10">
+            <UserRoundCheck className="h-4 w-4 text-accent" aria-hidden /> You review and approve every result before anything is final.
+          </p>
         </section>
       )}
     </AppShell>
@@ -186,15 +190,15 @@ function SaverNotice({ saver }: { saver: SaverStatus }) {
         ? 'Estimated from how long your earlier Saver grading took.'
         : 'Saver grading usually finishes within an hour (at most 24 hours).'
   return (
-    <div className="mt-6 rounded-card border border-line bg-brand-light/40 px-5 py-4 text-left" role="status" aria-live="polite">
-      <p className="flex items-center gap-2 text-[15px] font-semibold">
-        <Clock className="h-4 w-4 text-brand" aria-hidden /> {when}
+    <div className="animate-fade mt-6 rounded-card border border-brand-100 bg-brand-light px-4 py-4 text-left sm:px-5" role="status" aria-live="polite">
+      <p className="flex items-start gap-2 text-[14px] font-semibold text-navy sm:text-[15px]">
+        <Clock className="mt-0.5 h-4 w-4 shrink-0 text-brand" aria-hidden /> {when}
       </p>
       <p className="mt-1 text-[13px] text-muted">
         Saver mode (half price). Sent at {clockTime(saver.submitted_at)}. {basis}
       </p>
-      <p className="mt-2 flex items-center gap-2 text-[13px] text-muted">
-        <BellRing className="h-3.5 w-3.5" aria-hidden /> You can close this page. You&apos;ll get a notification when the drafts are ready.
+      <p className="mt-2 flex items-start gap-2 text-[13px] text-muted">
+        <BellRing className="mt-0.5 h-3.5 w-3.5 shrink-0 text-accent" aria-hidden /> You can close this page. You&apos;ll get a notification when the drafts are ready.
       </p>
     </div>
   )

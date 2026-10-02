@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { Lightbulb, RefreshCw, Share, UserRoundX } from 'lucide-react'
 import { api } from '../lib/api'
@@ -12,7 +12,7 @@ import { SubjectChip } from '../components/ui/Chip'
 import { Modal } from '../components/ui/Modal'
 import { ErrorState, Loading } from '../components/ui/States'
 
-const ORANGE = '#F97316'
+const INDIGO = '#4F46E5'
 
 export default function ClassSummary() {
   const [activityId, setActivityId, idError] = useActivityId()
@@ -85,15 +85,15 @@ export default function ClassSummary() {
         <Loading label="Building the class summary…" />
       ) : (
         <>
-          <div className="flex items-start justify-between">
-            <div>
-              <div className="flex items-center gap-3">
-                <h2 className="text-[24px] font-bold tracking-tight">{s.activity.title.replace(': ', ', ')}</h2>
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+                <h2 className="text-[20px] font-bold leading-snug sm:text-[24px]">{s.activity.title.replace(': ', ', ')}</h2>
                 <SubjectChip subject={s.activity.subject} size="sm" />
               </div>
-              <label className="mt-3 block">
+              <label className="mt-3 block max-w-full">
                 <span className="sr-only">Activity and class</span>
-                <select className="h-[30px] rounded-[6px] border border-line bg-white px-3 pr-8 text-[13px] font-semibold" value={activityId ?? ''} onChange={(e) => setActivityId(e.target.value)}>
+                <select className="field h-10 w-full max-w-full pr-8 text-[13px] font-semibold sm:w-auto" value={activityId ?? ''} onChange={(e) => setActivityId(e.target.value)}>
                   {(acts.data ?? []).map((a) => (
                     <option key={a.id} value={a.id}>
                       {a.id === s.activity.id ? `${a.class_name} (${s.students} students)` : `${a.title} · ${a.class_name}`}
@@ -102,16 +102,16 @@ export default function ClassSummary() {
                 </select>
               </label>
             </div>
-            <Button variant="secondary" size="lg" className="h-[46px] text-[16px]" icon={<Share className="h-4 w-4" aria-hidden />} onClick={exportSummary}>
+            <Button variant="secondary" className="w-full shrink-0 sm:w-auto" icon={<Share className="h-4 w-4" aria-hidden />} onClick={exportSummary}>
               Export summary
             </Button>
           </div>
 
-          <div className="mt-8 grid grid-cols-4 gap-5">
-            <div className="card px-6 py-7">
+          <div className="mt-6 grid grid-cols-2 gap-3 sm:mt-8 sm:gap-5 xl:grid-cols-4">
+            <div className="card animate-rise px-4 py-5 sm:px-6 sm:py-6">
               <p className="label-caps">Submitted</p>
-              <p className="mt-2 text-[32px] font-bold leading-none">
-                {s.submissions.submitted} <span className="text-[15px] font-medium text-muted">of {s.students}</span>
+              <p className="mt-2 text-[26px] font-bold leading-none text-navy sm:text-[32px]">
+                {s.submissions.submitted} <span className="text-[14px] font-medium text-muted sm:text-[15px]">of {s.students}</span>
               </p>
               {(s.submissions.not_submitted.length > 0 || s.submissions.unidentified > 0) && (
                 <p className="mt-2 text-[12px] text-muted">
@@ -122,18 +122,18 @@ export default function ClassSummary() {
             </div>
             <Stat label="Papers approved" value={String(s.approved)} sub={`of ${s.students}`} />
             <Stat label="Average score" value={String(s.average_score)} sub={`/ ${s.out_of}`} />
-            <div className="card px-6 py-7">
+            <div className="card animate-rise px-4 py-5 sm:px-6 sm:py-6" style={{ animationDelay: '150ms' }}>
               <p className="label-caps">Most missed criterion</p>
-              <p className="mt-2 text-[24px] font-bold leading-tight text-bad-strong">{s.most_missed_criterion ?? '—'}</p>
+              <p className="mt-2 text-[17px] font-bold leading-tight text-bad-text sm:text-[22px]">{s.most_missed_criterion ?? '—'}</p>
             </div>
           </div>
 
-          <div className="mt-8 grid grid-cols-2 gap-6">
+          <div className="mt-6 grid grid-cols-1 gap-4 sm:mt-8 sm:gap-6 lg:grid-cols-2">
             <ChartCard title="Errors by type" data={s.errors_by_type.map((e) => ({ name: e.label, value: e.count }))} />
             <ChartCard title={isGrammar ? 'Per-item average' : 'Per-problem average'} data={s.per_problem.map((p) => ({ name: p.label, value: p.average }))} max={10} />
           </div>
 
-          <div className="mt-10 grid grid-cols-[minmax(0,1fr)_362px] gap-6">
+          <div className="mt-8 grid grid-cols-1 gap-6 sm:mt-10 xl:grid-cols-[minmax(0,1fr)_362px]">
             <section aria-labelledby="misc-title">
               <div className="flex items-center justify-between gap-4 px-2">
                 <h3 id="misc-title" className="text-[17px] font-semibold">
@@ -158,18 +158,18 @@ export default function ClassSummary() {
               <div className="mt-4 flex flex-col gap-3">
                 {s.misconceptions.length === 0 && <p className="card px-6 py-6 text-[14px] text-muted">No repeated errors yet.</p>}
                 {s.misconceptions.map((m) => (
-                  <article key={m.text} className="card lift px-6 py-6">
-                    <div className="flex items-start justify-between gap-6">
+                  <article key={m.text} className="card lift px-4 py-5 sm:px-6 sm:py-6">
+                    <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between sm:gap-6">
                       <p className="text-[15px] font-semibold">
                         &quot;{m.count} of {s.students} students {m.text}&quot;
                       </p>
-                      <span className="shrink-0 text-[12px] font-semibold text-gray-400">{m.problems.join(', ')}</span>
+                      <span className="shrink-0 text-[12px] font-semibold text-muted">{m.problems.join(', ')}</span>
                     </div>
                     <span className={`mt-1 inline-block rounded border px-2 py-0.5 text-[11px] font-semibold ${m.error_type === 'computational' ? 'border-warn-border bg-warn-bg text-warn-text' : 'border-bad-border bg-bad-bg text-bad-text'}`}>
                       {s.errors_by_type.find((e) => e.error_type === m.error_type)?.label ?? m.error_type}
                     </span>
-                    <div className="mt-4 h-2 overflow-hidden rounded-full bg-[#F5F3F1]" role="meter" aria-valuemin={0} aria-valuemax={s.students} aria-valuenow={m.count} aria-label="Share of students">
-                      <div className="h-full rounded-full bg-brand" style={{ width: `${(m.count / Math.max(1, s.students)) * 100}%` }} />
+                    <div className="mt-4 h-2 overflow-hidden rounded-full bg-[#E9EDF5]" role="meter" aria-valuemin={0} aria-valuemax={s.students} aria-valuenow={m.count} aria-label="Share of students">
+                      <div className="h-full rounded-full bg-accent" style={{ width: `${(m.count / Math.max(1, s.students)) * 100}%` }} />
                     </div>
                   </article>
                 ))}
@@ -179,19 +179,19 @@ export default function ClassSummary() {
               <h3 id="insight-title" className="text-[17px] font-semibold">
                 Actionable insights
               </h3>
-              <div className="mt-4 rounded-2xl border border-[#FBD5B5] bg-[#FFF1E6] px-8 py-8">
-                <span className="flex h-10 w-10 items-center justify-center rounded-ctl bg-brand text-white" aria-hidden>
+              <div className="on-dark mt-4 rounded-2xl bg-navy bg-[radial-gradient(90%_70%_at_100%_0%,#323C96_0%,transparent_70%)] px-5 py-6 text-white sm:px-8 sm:py-8">
+                <span className="flex h-10 w-10 items-center justify-center rounded-ctl bg-accent text-navy-950" aria-hidden>
                   <Lightbulb className="h-5 w-5" />
                 </span>
-                <h4 className="mt-4 text-[17px] font-semibold text-brand-dark">Suggested reteach focus</h4>
-                <p className="mt-2 text-[15px] leading-relaxed text-gray-700">{s.reteach_focus}</p>
-                <Button variant="soft" className="mt-5 w-full text-[13px]" onClick={gen} loading={pLoading}>
+                <h4 className="mt-4 text-[17px] font-semibold text-white">Suggested reteach focus</h4>
+                <p className="mt-2 text-[15px] leading-relaxed text-[#DDE2F7]">{s.reteach_focus}</p>
+                <Button className="mt-5 w-full" onClick={gen} loading={pLoading}>
                   {isGrammar ? 'Generate practice items' : 'Generate practice problems'}
                 </Button>
-                <p className="mt-3 text-[11px] text-muted">{AI_LABEL}. Counts come from the reviewed grades, not from the AI.</p>
+                <p className="mt-3 text-[11px] text-[#B8C0E8]">{AI_LABEL}. Counts come from the reviewed grades, not from the AI.</p>
               </div>
               {s.submissions.not_submitted.length > 0 && (
-                <div className="card mt-4 px-6 py-5">
+                <div className="card mt-4 px-4 py-5 sm:px-6">
                   <h4 className="flex items-center gap-2 text-[15px] font-semibold">
                     <UserRoundX className="h-4 w-4 text-muted" aria-hidden /> Not submitted ({s.submissions.not_submitted.length})
                   </h4>
@@ -213,7 +213,7 @@ export default function ClassSummary() {
         </>
       )}
 
-      <Modal open={!!practice} onClose={() => setPractice(null)} labelledBy="practice-title" className="w-[560px] p-8">
+      <Modal open={!!practice} onClose={() => setPractice(null)} labelledBy="practice-title" className="max-w-[560px] p-5 sm:p-8">
         <h2 id="practice-title" className="text-[20px] font-bold">
           {isGrammar ? 'Practice items' : 'Practice problems'}
         </h2>
@@ -239,27 +239,40 @@ export default function ClassSummary() {
 
 function Stat({ label, value, sub }: { label: string; value: string; sub: string }) {
   return (
-    <div className="card px-6 py-7">
+    <div className="card animate-rise px-4 py-5 sm:px-6 sm:py-6" style={{ animationDelay: '75ms' }}>
       <p className="label-caps">{label}</p>
-      <p className="mt-2 text-[32px] font-bold leading-none">
-        {value} <span className="text-[15px] font-medium text-muted">{sub}</span>
+      <p className="mt-2 text-[26px] font-bold leading-none text-navy sm:text-[32px]">
+        {value} <span className="text-[14px] font-medium text-muted sm:text-[15px]">{sub}</span>
       </p>
     </div>
   )
 }
 
+function useNarrow(px = 640) {
+  const q = `(max-width: ${px - 1}px)`
+  const [narrow, setNarrow] = useState(() => typeof window !== 'undefined' && window.matchMedia(q).matches)
+  useEffect(() => {
+    const m = window.matchMedia(q)
+    const on = () => setNarrow(m.matches)
+    m.addEventListener('change', on)
+    return () => m.removeEventListener('change', on)
+  }, [q])
+  return narrow
+}
+
 function ChartCard({ title, data, max }: { title: string; data: { name: string; value: number }[]; max?: number }) {
+  const narrow = useNarrow()
   return (
-    <section className="card px-8 py-8" aria-label={title}>
+    <section className="card px-4 py-5 sm:px-8 sm:py-7" aria-label={title}>
       <h3 className="text-[17px] font-semibold">{title}</h3>
-      <div className="mt-6 h-[290px]" role="img" aria-label={`${title}: ${data.map((d) => `${d.name} ${d.value}`).join(', ')}`}>
+      <div className="mt-4 h-[230px] sm:mt-6 sm:h-[280px]" role="img" aria-label={`${title}: ${data.map((d) => `${d.name} ${d.value}`).join(', ')}`}>
         <ResponsiveContainer width="100%" height="100%">
           <BarChart data={data} margin={{ top: 10, right: 10, left: -20, bottom: 0 }} barCategoryGap="8%">
-            <CartesianGrid stroke="#F0EEEC" />
-            <XAxis dataKey="name" tick={{ fontSize: 10, fill: '#374151' }} tickLine={false} axisLine={{ stroke: '#374151' }} interval={0} />
-            <YAxis tick={{ fontSize: 10, fill: '#374151' }} tickLine={false} axisLine={false} domain={max ? [0, max] : [0, 'auto']} allowDecimals={false} />
-            <Tooltip cursor={{ fill: '#FFF1E6' }} contentStyle={{ fontSize: 12, borderRadius: 8 }} />
-            <Bar dataKey="value" fill={ORANGE} isAnimationActive={false} />
+            <CartesianGrid stroke="#EEF1F7" vertical={false} />
+            <XAxis dataKey="name" tick={{ fontSize: 10, fill: '#5B6478' }} tickLine={false} axisLine={{ stroke: '#CBD2E1' }} interval={0} angle={narrow ? -30 : 0} textAnchor={narrow ? 'end' : 'middle'} height={narrow ? 64 : 30} />
+            <YAxis tick={{ fontSize: 10, fill: '#5B6478' }} tickLine={false} axisLine={false} domain={max ? [0, max] : [0, 'auto']} allowDecimals={false} />
+            <Tooltip cursor={{ fill: '#EEF2FF' }} contentStyle={{ fontSize: 12, borderRadius: 10, border: '1px solid #E3E7F0', fontFamily: 'Poppins, sans-serif' }} />
+            <Bar dataKey="value" fill={INDIGO} radius={[6, 6, 0, 0]} maxBarSize={56} isAnimationActive={false} />
           </BarChart>
         </ResponsiveContainer>
       </div>
