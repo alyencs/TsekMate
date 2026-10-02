@@ -676,20 +676,14 @@ function RubricBreakdown({ rows, total, max, label, onChange }: { rows: Row[]; t
                 <td className="px-2 py-3 text-right text-[14px] text-muted">{c.assessed ? fmtScore(c.computed) : '—'}</td>
                 <td className="px-6 py-3 text-right">
                   <span className="inline-flex items-center gap-1.5 text-[14px] text-muted">
-                    <input
+                    <ScoreInput
                       id={id}
-                      type="number"
-                      min={0}
+                      value={c.value}
+                      aiValue={c.computed}
                       max={c.points}
-                      step="any"
-                      inputMode="decimal"
-                      value={c.override === undefined || c.override === null ? fmtScore(c.computed) : Number.isNaN(c.override) ? '' : c.override}
-                      onChange={(e) => onChange(c.name, e.target.value === '' ? null : Number(e.target.value))}
-                      aria-invalid={c.invalid}
-                      aria-describedby={`${id}-max`}
-                      className={`h-9 w-16 rounded-[6px] border bg-white text-center text-[15px] font-semibold text-ink [appearance:textfield] focus:outline-none focus:ring-2 [&::-webkit-inner-spin-button]:appearance-none ${
-                        c.invalid ? 'border-bad-strong focus:ring-bad-strong/20' : 'border-line focus:border-brand focus:ring-brand/20'
-                      }`}
+                      invalid={c.invalid}
+                      describedBy={`${id}-max`}
+                      onCommit={(v) => onChange(c.name, v)}
                     />
                     <span id={`${id}-max`}>/ {fmtScore(c.points)}</span>
                   </span>
@@ -708,6 +702,89 @@ function RubricBreakdown({ rows, total, max, label, onChange }: { rows: Row[]; t
         </tbody>
       </table>
     </section>
+  )
+}
+
+// ---------------------------------------------------------------- criterion score field
+const SCORE_TEXT = /^\d*\.?\d{0,2}$/ // digits, one decimal point, up to 2 decimals; no sign
+const STEP = 0.5
+
+/**
+ * A typed score for one criterion (0 to the criterion's points).
+ *
+ * A text field with a decimal keypad, not type="number": the teacher's draft text is kept as typed, so the field can be
+ * empty or end in "." while they type. Every complete number is applied at once (the total updates live); a value
+ * above the maximum becomes the maximum and a minus sign is not accepted. Leaving the field empty restores the AI's
+ * points. Arrow up/down step by 0.5 within the limits.
+ */
+function ScoreInput({ id, value, aiValue, max, invalid, describedBy, onCommit }: { id: string; value: number; aiValue: number; max: number; invalid: boolean; describedBy: string; onCommit: (v: number | null) => void }) {
+  const [text, setText] = useState(fmtScore(value))
+  const [editing, setEditing] = useState(false)
+  const [hint, setHint] = useState<string | null>(null)
+  useEffect(() => {
+    if (!editing) setText(fmtScore(value))
+  }, [value, editing])
+
+  function apply(n: number) {
+    const v = r2(Math.min(Math.max(n, 0), max))
+    setHint(n > max ? `The most for this criterion is ${fmtScore(max)}.` : null)
+    onCommit(v)
+    return v
+  }
+
+  return (
+    <span className="relative inline-flex flex-col items-end">
+      <input
+        id={id}
+        type="text"
+        inputMode="decimal"
+        autoComplete="off"
+        value={text}
+        onFocus={(e) => {
+          setEditing(true)
+          e.currentTarget.select()
+        }}
+        onChange={(e) => {
+          const raw = e.target.value.replace(',', '.').trim()
+          if (raw.includes('-')) return setHint("Scores can't be negative.")
+          if (!SCORE_TEXT.test(raw)) return setHint('Type a number, for example 2 or 1.5.')
+          setHint(null)
+          if (raw === '' || raw === '.') return setText(raw) // in progress: nothing to apply yet
+          const n = Number(raw)
+          if (n > max) return setText(fmtScore(apply(n)))
+          setText(raw)
+          apply(n)
+        }}
+        onKeyDown={(e) => {
+          if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+            e.preventDefault()
+            const base = text === '' || text === '.' ? value : Number(text)
+            setText(fmtScore(apply(base + (e.key === 'ArrowUp' ? STEP : -STEP))))
+            setHint(null)
+          } else if (e.key === 'Enter') {
+            e.currentTarget.blur()
+          }
+        }}
+        onBlur={() => {
+          setEditing(false)
+          setHint(null)
+          if (text === '' || text === '.') {
+            onCommit(null) // empty: back to the AI's points
+            setText(fmtScore(aiValue))
+          }
+        }}
+        aria-invalid={invalid || undefined}
+        aria-describedby={hint ? `${describedBy} ${id}-hint` : describedBy}
+        className={`h-9 w-16 rounded-[6px] border bg-white text-center text-[15px] font-semibold text-ink focus:outline-none focus:ring-2 ${
+          invalid ? 'border-bad-strong focus:ring-bad-strong/20' : 'border-line focus:border-brand focus:ring-brand/20'
+        }`}
+      />
+      {hint && (
+        <span id={`${id}-hint`} role="status" className="absolute right-0 top-10 w-max max-w-[220px] text-right text-[11px] font-semibold text-warn-text">
+          {hint}
+        </span>
+      )}
+    </span>
   )
 }
 
