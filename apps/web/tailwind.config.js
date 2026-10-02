@@ -12,17 +12,18 @@ export default {
         // Neutrals: cool, light, so the navy + orange brand reads clearly.
         page: '#F6F7FB',
         soft: '#F3F5FA', // soft fields, table headers, inset panels
-        rowhover: '#F5F7FF',
+        rowhover: '#FFF8F3',
         ink: '#161B3D',
         muted: '#5B6478', // 5.9:1 on white
         line: '#E3E7F0',
         // Deep navy: sidebar, headings, wordmark.
         navy: { DEFAULT: '#1B2160', 950: '#0F1338', 900: '#161B4F', 800: '#1B2160', 700: '#262E7A', 600: '#323C96' },
-        // Indigo: structure, selection, focus, links. (Was orange; orange is now the accent only.)
-        brand: { DEFAULT: '#4F46E5', dark: '#4338CA', light: '#EEF2FF', tint: '#C7D2FE', 100: '#E0E7FF' },
+        // Orange: the main brand color. Primary actions, selection, focus, links, active states.
+        // `strong` keeps white text at 4.5:1; `dark` is for orange text on white or tinted backgrounds.
+        brand: { DEFAULT: '#EA580C', strong: '#D2450C', dark: '#B23A0A', text: '#C2410C', light: '#FFF4EC', tint: '#FDBA74', 100: '#FFEDD5', bright: '#FB8A4C' },
         sky: { DEFAULT: '#3B82F6', light: '#93C5FD' },
-        // Orange: calls to action and highlights. `strong` keeps white text at 4.5:1 for buttons.
-        accent: { DEFAULT: '#F97316', strong: '#D2450C', dark: '#B23A0A', text: '#C2410C', light: '#FFF4EC', tint: '#FDBA74' },
+        // Blue: the accent. Status highlights, badges, "you're in control" moments, charts.
+        accent: { DEFAULT: '#3B82F6', strong: '#2563EB', dark: '#1D4ED8', text: '#1D4ED8', light: '#EFF6FF', tint: '#BFDBFE' },
         ok: { text: '#166534', bg: '#DCFCE7', border: '#86EFAC', bar: '#16A34A' },
         bad: { text: '#991B1B', bg: '#FEE2E2', border: '#FCA5A5', strong: '#DC2626' },
         warn: { text: '#92400E', bg: '#FEF3C7', border: '#FCD34D', bar: '#CA8A04' },

@@ -84,10 +84,10 @@ export default function Queue() {
                   aria-controls="queue-panel"
                   tabIndex={tab === t.key ? 0 : -1}
                   onClick={() => setTab(t.key)}
-                  className={`-mb-px shrink-0 whitespace-nowrap border-b-2 px-3 pb-3 pt-1 text-[14px] transition-colors sm:px-4 ${tab === t.key ? 'border-accent font-semibold text-navy' : 'border-transparent text-muted hover:text-ink'}`}
+                  className={`-mb-px shrink-0 whitespace-nowrap border-b-2 px-3 pb-3 pt-1 text-[14px] transition-colors sm:px-4 ${tab === t.key ? 'border-brand font-semibold text-navy' : 'border-transparent text-muted hover:text-ink'}`}
                 >
                   {t.label}{' '}
-                  <span className={`ml-1 rounded-full px-1.5 py-0.5 text-[11px] font-semibold ${tab === t.key ? 'bg-navy text-white' : 'bg-soft text-muted'}`}>{queue.data?.counts[t.key] ?? '…'}</span>
+                  <span className={`ml-1 rounded-full px-1.5 py-0.5 text-[11px] font-semibold ${tab === t.key ? 'bg-brand-strong text-white' : 'bg-soft text-muted'}`}>{queue.data?.counts[t.key] ?? '…'}</span>
                 </button>
               ))}
             </div>
@@ -231,7 +231,7 @@ export default function Queue() {
                               {retrying === r.submission_id ? 'Starting…' : 'Grade again'}
                             </button>
                           )}
-                          <button onClick={() => open(r)} className={`h-9 rounded-ctl px-4 text-[13px] font-semibold transition-colors ${r.status === 'approved' ? 'border border-line bg-white text-ink hover:bg-soft' : 'bg-accent-strong text-white shadow-cta hover:bg-accent-dark'}`} aria-label={`${r.status === 'approved' ? 'View' : 'Review'} ${r.student_name ?? r.student_id ?? 'unidentified paper'}`}>
+                          <button onClick={() => open(r)} className={`h-9 rounded-ctl px-4 text-[13px] font-semibold transition-colors ${r.status === 'approved' ? 'border border-line bg-white text-ink hover:bg-soft' : 'bg-brand-strong text-white shadow-cta hover:bg-brand-dark'}`} aria-label={`${r.status === 'approved' ? 'View' : 'Review'} ${r.student_name ?? r.student_id ?? 'unidentified paper'}`}>
                             {r.status === 'approved' ? 'View' : 'Review'}
                           </button>
                         </span>

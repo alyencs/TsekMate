@@ -51,7 +51,7 @@ export function ActivitiesTable({
   const active = activities.length
 
   return (
-    <section className="card overflow-hidden" aria-labelledby="activities-title">
+    <section className="card min-w-0 overflow-hidden supports-[overflow:clip]:overflow-clip" aria-labelledby="activities-title">
       <div className="flex flex-col gap-4 border-b border-line px-4 py-4 sm:flex-row sm:items-start sm:justify-between sm:px-6 sm:py-5">
         <div className="min-w-0">
           <h2 id="activities-title" className="text-[17px] font-semibold">
@@ -61,27 +61,27 @@ export function ActivitiesTable({
             {active} assignment{active === 1 ? '' : 's'} across your classes · grades stay AI-assisted drafts until you approve them
           </p>
         </div>
-        <div className="flex shrink-0 items-center gap-2 sm:gap-3">
-          <div className="relative flex-1 sm:flex-none" ref={menuBox}>
+        <div className="grid w-full grid-cols-1 gap-2 min-[360px]:grid-cols-[minmax(0,1fr)_auto] sm:flex sm:w-auto sm:shrink-0 sm:items-center sm:gap-3">
+          <div className="relative min-w-0" ref={menuBox}>
             <Button
               ref={menuBtn}
               variant="secondary"
-              className="w-full max-w-full sm:w-auto"
-              icon={<Filter className="h-4 w-4 text-muted" aria-hidden />}
-              iconRight={<ChevronDown className={`h-4 w-4 text-muted transition-transform ${menu ? 'rotate-180' : ''}`} aria-hidden />}
+              className="w-full min-w-0 justify-between px-3 sm:w-auto sm:justify-center sm:px-4"
+              icon={<Filter className="hidden h-4 w-4 shrink-0 text-muted sm:block" aria-hidden />}
+              iconRight={<ChevronDown className={`h-4 w-4 shrink-0 text-muted transition-transform ${menu ? 'rotate-180' : ''}`} aria-hidden />}
               aria-expanded={menu}
               aria-haspopup="menu"
               onClick={() => setMenu((m) => !m)}
               onKeyDown={(e) => e.key === 'ArrowDown' && (e.preventDefault(), setMenu(true))}
             >
-              <span className="max-w-[160px] truncate">{klass === 'all' ? 'All classes' : klass}</span>
+              <span className="min-w-0 truncate text-left sm:max-w-[160px]">{klass === 'all' ? 'All classes' : klass}</span>
             </Button>
             {menu && (
               <div
                 role="menu"
                 aria-label="Filter by class"
                 onKeyDown={(e) => rovingKeyDown(e, 'menuitemradio')}
-                className="animate-pop absolute left-0 z-20 mt-2 w-64 origin-top-left rounded-card border border-line bg-white py-1 shadow-pop sm:left-auto sm:right-0 sm:origin-top-right"
+                className="animate-pop absolute left-0 z-20 mt-2 w-[min(16rem,calc(100vw-3rem))] origin-top-left rounded-card border border-line bg-white py-1 shadow-pop sm:left-auto sm:right-0 sm:origin-top-right"
                 ref={(el) => el?.querySelector<HTMLElement>('[aria-checked="true"]')?.focus()}
               >
                 {['all', ...classes].map((c) => (
@@ -106,13 +106,13 @@ export function ActivitiesTable({
               </div>
             )}
           </div>
-          <Button icon={<Plus className="h-4 w-4" aria-hidden />} onClick={() => navigate('/activities/new')} className="shrink-0">
+          <Button icon={<Plus className="h-4 w-4" aria-hidden />} onClick={() => navigate('/activities/new')} className="w-full sm:w-auto sm:shrink-0">
             New activity
           </Button>
         </div>
       </div>
 
-      <div className="scroll-x flex gap-2 px-4 pt-4 sm:px-6 sm:pt-5" role="group" aria-label="Filter by subject">
+      <div className="scroll-x flex gap-2 px-4 pt-4 after:block after:w-2 after:shrink-0 after:content-[''] sm:px-6 sm:pt-5 sm:after:w-4" role="group" aria-label="Filter by subject">
         {(['all', ...SUBJECT_LIST] as const).map((s) => (
           <button
             key={s}
@@ -148,7 +148,7 @@ export function ActivitiesTable({
                         <SubjectChip subject={a.subject} size="sm" />
                         <span className={`inline-flex h-6 items-center rounded-full px-2 font-semibold ring-1 ring-inset ${st.tone}`}>{st.label}</span>
                       </span>
-                      <span className="mt-1.5 block truncate text-[12px] text-muted">
+                      <span className="mt-1.5 block text-[12px] leading-snug text-muted">
                         {a.class_name} · {a.papers}
                         {a.roster_size > 0 ? `/${a.roster_size}` : ''} papers · {relativeDay(a.updated_at)}
                       </span>
@@ -221,7 +221,7 @@ export function ActivitiesTable({
               aria-current={i === page ? 'page' : undefined}
               aria-label={`Page ${i + 1}`}
               onClick={() => setPage(i)}
-              className={`h-9 min-w-9 rounded-ctl px-2 text-[14px] font-medium transition-colors ${i === page ? 'bg-navy text-white' : 'border border-line text-ink hover:bg-soft'}`}
+              className={`h-9 min-w-9 rounded-ctl px-2 text-[14px] font-medium transition-colors ${i === page ? 'bg-brand-strong text-white' : 'border border-line text-ink hover:bg-soft'}`}
             >
               {i + 1}
             </button>

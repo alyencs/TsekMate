@@ -102,10 +102,10 @@ export default function Grading() {
             <span className="font-semibold" aria-live="polite" aria-atomic="true">
               {done} of {total} done
             </span>
-            <span className="font-semibold text-brand">{pct}%</span>
+            <span className="font-semibold text-brand-dark">{pct}%</span>
           </div>
           <div className="mt-3 h-3 overflow-hidden rounded-full bg-[#E9EDF5]" role="progressbar" aria-valuemin={0} aria-valuemax={total} aria-valuenow={done} aria-label="Grading progress">
-            <div className="h-full rounded-full bg-gradient-to-r from-brand to-sky transition-all duration-500" style={{ width: `${pct}%` }} />
+            <div className="h-full rounded-full bg-gradient-to-r from-brand-strong to-brand transition-all duration-500" style={{ width: `${pct}%` }} />
           </div>
 
           {windowed.length > 0 && (
@@ -120,7 +120,7 @@ export default function Grading() {
                     </span>
                   )}
                   {i.state === 'checking' && (
-                    <span className="flex items-center gap-1.5 text-[14px] font-semibold text-brand">
+                    <span className="flex items-center gap-1.5 text-[14px] font-semibold text-brand-dark">
                       <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> Checking...
                     </span>
                   )}

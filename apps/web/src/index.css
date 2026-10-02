@@ -20,11 +20,11 @@
     @apply tracking-tight;
   }
   ::selection {
-    background: #c7d2fe;
+    background: #fed7aa;
     color: #161b3d;
   }
   :focus-visible {
-    outline: 2px solid #4f46e5;
+    outline: 2px solid #ea580c;
     outline-offset: 2px;
   }
   /* Dark surfaces (sidebar, drawer, sign-in panel) get a light focus ring. */
@@ -66,7 +66,7 @@
     @apply bg-white text-ink ring-1 ring-inset ring-line hover:bg-brand-light hover:text-brand-dark hover:ring-brand-tint;
   }
   .pill-on {
-    @apply bg-navy text-white ring-1 ring-inset ring-navy;
+    @apply bg-brand-strong text-white ring-1 ring-inset ring-brand-strong;
   }
   /* Notices (status / error banners) */
   .notice {

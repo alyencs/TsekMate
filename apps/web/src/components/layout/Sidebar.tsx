@@ -21,7 +21,7 @@ const item = (on: boolean) =>
   }`
 
 function Indicator({ on }: { on: boolean }) {
-  return <span className={`absolute -left-4 top-2 bottom-2 w-1 rounded-r-full bg-accent transition-opacity duration-200 ${on ? 'opacity-100' : 'opacity-0'}`} aria-hidden />
+  return <span className={`absolute -left-4 top-2 bottom-2 w-1 rounded-r-full bg-brand transition-opacity duration-200 ${on ? 'opacity-100' : 'opacity-0'}`} aria-hidden />
 }
 
 /** Navy sidebar. Rendered fixed on desktop and inside the slide-in drawer on smaller screens (`onClose` set). */
@@ -50,10 +50,10 @@ export function Sidebar({ active, variant, queueBadge, onClose }: { active?: Nav
           return (
             <NavLink key={key} to={to} aria-current={on ? 'page' : undefined} className={item(on)}>
               <Indicator on={on} />
-              <Icon className={`h-[18px] w-[18px] shrink-0 transition-colors ${on ? 'text-accent' : 'text-[#9AA3D8] group-hover:text-white'}`} aria-hidden />
+              <Icon className={`h-[18px] w-[18px] shrink-0 transition-colors ${on ? 'text-brand-bright' : 'text-[#9AA3D8] group-hover:text-white'}`} aria-hidden />
               <span className="flex-1 truncate">{label}</span>
               {key === 'queue' && queueBadge ? (
-                <span className="rounded-full bg-accent px-2 py-0.5 text-[11px] font-bold text-navy-950" aria-label={`${queueBadge} flagged papers`}>
+                <span className="rounded-full bg-brand-bright px-2 py-0.5 text-[11px] font-bold text-navy-950" aria-label={`${queueBadge} flagged papers`}>
                   {queueBadge}
                 </span>
               ) : null}
@@ -82,12 +82,12 @@ export function Sidebar({ active, variant, queueBadge, onClose }: { active?: Nav
         <div className="flex flex-col gap-1">
           <NavLink to="/notifications" aria-current={active === 'notifications' ? 'page' : undefined} className={item(active === 'notifications')}>
             <Indicator on={active === 'notifications'} />
-            <Bell className={`h-[18px] w-[18px] ${active === 'notifications' ? 'text-accent' : 'text-[#9AA3D8] group-hover:text-white'}`} aria-hidden />
+            <Bell className={`h-[18px] w-[18px] ${active === 'notifications' ? 'text-brand-bright' : 'text-[#9AA3D8] group-hover:text-white'}`} aria-hidden />
             Notifications
           </NavLink>
           <NavLink to="/settings" aria-current={active === 'settings' ? 'page' : undefined} className={item(active === 'settings')}>
             <Indicator on={active === 'settings'} />
-            <Settings className={`h-[18px] w-[18px] ${active === 'settings' ? 'text-accent' : 'text-[#9AA3D8] group-hover:text-white'}`} aria-hidden />
+            <Settings className={`h-[18px] w-[18px] ${active === 'settings' ? 'text-brand-bright' : 'text-[#9AA3D8] group-hover:text-white'}`} aria-hidden />
             Settings
           </NavLink>
         </div>

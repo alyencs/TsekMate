@@ -153,7 +153,7 @@ export default function CreateActivity() {
             <li key={s} className="flex shrink-0 items-center gap-2 sm:gap-3">
               {i > 0 && <span className="h-px w-5 bg-line sm:w-12" aria-hidden />}
               <button type="button" onClick={() => refs[i].current?.scrollIntoView({ behavior: 'smooth', block: 'start' })} className="flex items-center gap-2 rounded-full py-1 pr-2" aria-current={step === i + 1 ? 'step' : undefined}>
-                <span className={`flex h-6 w-6 items-center justify-center rounded-full text-[11px] font-semibold ${step === i + 1 ? 'bg-navy text-white' : 'border border-line bg-white text-muted'}`}>{i + 1}</span>
+                <span className={`flex h-6 w-6 items-center justify-center rounded-full text-[11px] font-semibold ${step === i + 1 ? 'bg-brand-strong text-white' : 'border border-line bg-white text-muted'}`}>{i + 1}</span>
                 <span className={`whitespace-nowrap text-[13px] sm:text-[15px] ${step === i + 1 ? 'font-semibold text-ink' : 'text-muted'}`}>{s}</span>
               </button>
             </li>
@@ -194,7 +194,7 @@ export default function CreateActivity() {
                     aria-checked={on}
                     tabIndex={on ? 0 : -1}
                     onClick={() => setSubject(s)}
-                    className={`relative flex h-[108px] flex-col items-center justify-center gap-2 rounded-card border bg-white px-2 text-center transition-[border-color,box-shadow] sm:h-[136px] sm:gap-3 ${on ? 'border-brand shadow-[0_0_0_1px_#4F46E5,0_8px_20px_-12px_rgba(79,70,229,0.5)]' : 'border-line hover:border-brand-tint'}`}
+                    className={`relative flex h-[108px] flex-col items-center justify-center gap-2 rounded-card border bg-white px-2 text-center transition-[border-color,box-shadow] sm:h-[136px] sm:gap-3 ${on ? 'border-brand shadow-[0_0_0_1px_#EA580C,0_8px_20px_-12px_rgba(234,88,12,0.5)]' : 'border-line hover:border-brand-tint'}`}
                   >
                     {on && <CircleCheck className="absolute right-2 top-2 h-4 w-4 fill-brand text-white sm:right-4 sm:top-4" aria-hidden />}
                     <span className={`flex h-10 w-10 items-center justify-center rounded-full sm:h-12 sm:w-12 ${on ? 'bg-brand-light text-brand' : 'bg-[#E9EDF5] text-muted'}`}>
@@ -310,7 +310,7 @@ export default function CreateActivity() {
                   setRubricMode(m)
                   if (m === 'manual') setDraftOpen(false) // leaving AI mode discards the draft
                 }}
-                className={`flex min-h-[40px] items-center justify-center gap-1.5 rounded-[9px] px-3 text-center text-[13px] leading-tight transition-colors sm:px-4 sm:text-[14px] ${rubricMode === m ? 'bg-navy font-semibold text-white' : 'text-muted hover:text-ink'}`}
+                className={`flex min-h-[40px] items-center justify-center gap-1.5 rounded-[9px] px-3 text-center text-[13px] leading-tight transition-colors sm:px-4 sm:text-[14px] ${rubricMode === m ? 'bg-brand-strong font-semibold text-white' : 'text-muted hover:text-ink'}`}
               >
                 {m === 'ai' && <Sparkles className="h-3.5 w-3.5" aria-hidden />}
                 {label}
@@ -458,7 +458,7 @@ export default function CreateActivity() {
                   ['full_solution', 'Full solution', 'Show them exactly where they went wrong.'],
                 ] as const
               ).map(([v, l, d]) => (
-                <label key={v} className={`flex cursor-pointer items-center gap-4 rounded-card border bg-white px-4 py-4 transition-[border-color,box-shadow] ${style === v ? 'border-brand shadow-[0_0_0_1px_#4F46E5]' : 'border-line hover:border-brand-tint'}`}>
+                <label key={v} className={`flex cursor-pointer items-center gap-4 rounded-card border bg-white px-4 py-4 transition-[border-color,box-shadow] ${style === v ? 'border-brand shadow-[0_0_0_1px_#EA580C]' : 'border-line hover:border-brand-tint'}`}>
                   <input type="radio" name="style" value={v} checked={style === v} onChange={() => setStyle(v)} className="h-4 w-4 accent-brand" />
                   <span>
                     <span className="block text-[15px] font-semibold">{l}</span>
