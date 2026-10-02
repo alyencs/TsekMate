@@ -231,7 +231,10 @@ export interface GradingProgress {
   total: number
   done: number
   running: boolean
-  items: { submission_id: string; student_id: string | null; student_name: string | null; state: 'done' | 'checking' | 'waiting' | 'failed' }[]
+  /** 'stopped': the grading run was interrupted before this paper was graded (Grade all picks it up again). */
+  items: { submission_id: string; student_id: string | null; student_name: string | null; state: 'done' | 'checking' | 'waiting' | 'failed' | 'stopped' }[]
+  /** Papers of this activity that are not graded yet or whose grading failed. */
+  pending: number
   /** Set while Saver grading runs (half price, results usually within an hour). */
   saver: SaverStatus | null
 }
@@ -268,6 +271,8 @@ export interface ClassSummary {
   misconceptions: Misconception[]
   submissions: { submitted: number; not_submitted: RosterStatusRow[]; unidentified: number }
   reteach_focus: string
+  /** The AI-written part (misconception names, reteach focus) is cached; `stale` = the errors changed since. */
+  ai_summary: { cached: boolean; stale: boolean; refresh_failed: boolean; created_at: string | null }
 }
 
 export interface RosterStatusRow {
@@ -298,6 +303,9 @@ export interface ParentMessage {
   en: string
   fil: string
   approved: boolean
+  /** False when nothing was drafted yet (no AI call is made until the teacher asks). */
+  drafted: boolean
+  last_approved_at?: string | null
 }
 
 export interface AppNotification {

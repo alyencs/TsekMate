@@ -13,6 +13,7 @@ The activity's rubric is the single source of truth for the score breakdown:
 from __future__ import annotations
 
 import copy
+import math
 
 THRESHOLD = 0.75
 
@@ -150,11 +151,14 @@ def rubric_problems(criteria: list[dict], total: float | None) -> list[str]:
             v = float(c.get("points"))
         except (TypeError, ValueError):
             v = 0.0
-        if v <= 0:
+        if not math.isfinite(v):
+            errs.append(f"\"{c.get('name') or 'Unnamed criterion'}\" needs a real number of points.")
+            v = 0.0
+        elif v <= 0:
             errs.append(f"\"{c.get('name') or 'Unnamed criterion'}\" needs more than 0 points.")
         pts.append(v)
     s = round(sum(pts), 2)
-    if total is None or float(total) <= 0:
+    if total is None or not math.isfinite(float(total)) or float(total) <= 0:
         errs.append("Enter the rubric's total points.")
     elif abs(s - float(total)) > 1e-6:
         errs.append(f"The criteria add up to {s:g} points, but the rubric total is {float(total):g}. Make them match before grading.")

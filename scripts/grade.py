@@ -21,7 +21,7 @@ from app.store import get_store
 
 def load_activity(activity_id: str):
     store = get_store()
-    if store.kind == "memory":
+    if store.kind == "memory" and not store.select("activities"):
         build(store, with_images=False)
     b = Bundle(store, activity_id)
     return b.activity, b.problems, b.rubric

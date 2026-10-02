@@ -339,9 +339,17 @@ def build(store: Store, now: datetime | None = None, with_images: bool = True) -
     store.insert("students", [{"id": s, "name": NAMES[s], "section": CS_SECTION} for s in S_ROSTER] + [{"id": m, "name": NAMES[m], "section": ED_SECTION} for m in M])
     store.insert("rubric_templates", copy.deepcopy(RUBRIC_TEMPLATES))
 
+    # "Today" and "yesterday" are the teacher's local days (APP_TIMEZONE, as the dashboard counts them). Approvals
+    # are spread back from `today` in steps small enough to stay after local midnight at any hour, so the sample
+    # numbers are the same at 00:30 as at 15:00.
+    from .services.core import TZ
+
+    midnight = now.astimezone(TZ).replace(hour=0, minute=0, second=0, microsecond=0).astimezone(timezone.utc)
+    today = now - min(timedelta(hours=1), (now - midnight) / 2)
+    step = min(timedelta(minutes=3), (today - midnight) / 60)  # at most ~45 approvals per activity day
     when = {
-        "today": now - timedelta(hours=1),
-        "yesterday": now - timedelta(days=1, hours=1),
+        "today": today,
+        "yesterday": today - timedelta(days=1),
         "3days": now - timedelta(days=3),
         "4days": now - timedelta(days=4),
     }
@@ -505,7 +513,7 @@ def build(store: Store, now: datetime | None = None, with_images: bool = True) -
             approved_at = None
             if approved:
                 base = when[plan["approved_when"]]
-                approved_at = (base - timedelta(minutes=3 * n)).isoformat()
+                approved_at = (base - step * n).isoformat()
                 approved_seq += 1
                 if key == "science" and approved_seq > 18:  # 18 science approvals yesterday, the rest two days ago
                     approved_at = (now - timedelta(days=2, hours=2, minutes=n)).isoformat()
@@ -531,12 +539,14 @@ def build(store: Store, now: datetime | None = None, with_images: bool = True) -
         store.insert("ai_results", ai_rows)
         store.insert("teacher_reviews", reviews)
         if spec["clusters"]:
+            from .services.core import Bundle, error_signature
+
             store.insert(
                 "class_summaries",
                 {
                     "id": spec["id"],
                     "activity_id": spec["id"],
-                    "signature": "seed",
+                    "signature": error_signature(Bundle(store, spec["id"])),  # current until the errors change
                     "misconceptions": [
                         {"label": c["label"], "error_type": c["error_type"], "ids": cluster_members.get(ck, [])} for ck, c in spec["clusters"].items()
                     ],

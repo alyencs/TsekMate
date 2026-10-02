@@ -5,6 +5,8 @@ import time
 
 import pytest
 from fastapi.testclient import TestClient
+
+from tests.helpers import blank, sign_in
 from PIL import Image
 
 from app.config import get_settings
@@ -20,6 +22,7 @@ def client():
     from app.store import get_store
 
     with TestClient(app) as c:
+        sign_in(c)
         reset_and_seed(get_store())  # independent of what other test modules changed
         yield c
 
@@ -48,7 +51,7 @@ def wait_done(client, activity_id):
 
 def upload(client):
     buf = io.BytesIO()
-    Image.new("RGB", (400, 500), "white").save(buf, format="PNG")
+    blank((400, 500)).save(buf, format="PNG")
     r = client.post(f"/api/activities/{A}/submissions", files=[("files", ("p.png", buf.getvalue(), "image/png"))])
     assert r.status_code == 201
     return r.json()[0]["id"]

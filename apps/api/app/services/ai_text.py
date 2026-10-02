@@ -21,7 +21,7 @@ def misconceptions(b, keys: dict[str, tuple]) -> dict | None:
         return None
     lines = []
     for k, (_st, pid, u) in list(keys.items())[:400]:
-        lines.append(f"{k} | {b.problem_label(pid)} | {u['error_type']} | {u['criterion']} | {u.get('comment', '')[:160]}")
+        lines.append(f"{k} | {b.problem_label(pid)} | {u['error_type']} | {u['criterion']} | {str(u.get('comment') or '')[:160]}")
     pn, pns = NOUNS[b.subject]
     prompt = llm.render(
         (PROMPTS / "summary_v1.0.txt").read_text(),

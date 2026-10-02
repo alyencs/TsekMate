@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
-import { Lightbulb, Share, UserRoundX } from 'lucide-react'
+import { Lightbulb, RefreshCw, Share, UserRoundX } from 'lucide-react'
 import { api } from '../lib/api'
 import { AI_LABEL } from '../lib/subjects'
 import { useAsync } from '../lib/useAsync'
@@ -21,6 +21,8 @@ export default function ClassSummary() {
   const [practice, setPractice] = useState<{ items: string[] } | null>(null)
   const [pErr, setPErr] = useState<string | null>(null)
   const [pLoading, setPLoading] = useState(false)
+  const [refreshing, setRefreshing] = useState(false)
+  const [rErr, setRErr] = useState<string | null>(null)
   const s = sum.data
   const isGrammar = s?.activity.subject === 'grammar'
 
@@ -35,6 +37,22 @@ export default function ClassSummary() {
       setPractice({ items: [] })
     } finally {
       setPLoading(false)
+    }
+  }
+
+  // The AI part is generated only when the teacher asks; opening the page never calls the AI.
+  async function refreshAi() {
+    if (!activityId) return
+    setRefreshing(true)
+    setRErr(null)
+    try {
+      const fresh = await api.refreshClassSummary(activityId)
+      sum.setData(fresh)
+      if (fresh.ai_summary.refresh_failed) setRErr('The AI summary could not be updated right now. The counts above are current.')
+    } catch (e) {
+      setRErr((e as Error).message)
+    } finally {
+      setRefreshing(false)
     }
   }
 
@@ -117,9 +135,26 @@ export default function ClassSummary() {
 
           <div className="mt-10 grid grid-cols-[minmax(0,1fr)_362px] gap-6">
             <section aria-labelledby="misc-title">
-              <h3 id="misc-title" className="px-2 text-[17px] font-semibold">
-                Common misconceptions
-              </h3>
+              <div className="flex items-center justify-between gap-4 px-2">
+                <h3 id="misc-title" className="text-[17px] font-semibold">
+                  Common misconceptions
+                </h3>
+                {s.ai_summary.stale && (
+                  <Button size="sm" variant="secondary" onClick={refreshAi} loading={refreshing} icon={<RefreshCw className="h-3.5 w-3.5" aria-hidden />}>
+                    {s.ai_summary.cached ? 'Update AI summary' : 'Name misconceptions with AI'}
+                  </Button>
+                )}
+              </div>
+              {s.ai_summary.stale && (
+                <p className="mt-2 px-2 text-[12px] text-muted" role="status">
+                  {s.ai_summary.cached ? 'Grades changed since the AI summary was written. Counts are current; update to rename the misconceptions.' : 'Showing errors grouped by type. Ask the AI to name the common misconceptions.'}
+                </p>
+              )}
+              {rErr && (
+                <p className="mt-2 px-2 text-[13px] text-bad-text" role="alert">
+                  {rErr}
+                </p>
+              )}
               <div className="mt-4 flex flex-col gap-3">
                 {s.misconceptions.length === 0 && <p className="card px-6 py-6 text-[14px] text-muted">No repeated errors yet.</p>}
                 {s.misconceptions.map((m) => (

@@ -23,13 +23,18 @@ interface ProblemDraft {
 let nextKey = 1
 const blank = (): ProblemDraft => ({ key: nextKey++, text: '', expected_answer: '', sample_solution: '', rule: '' })
 
+/** Today's date in the teacher's time zone as YYYY-MM-DD (toISOString() would give the UTC date). */
+function localDate(d = new Date()): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
 export default function CreateActivity() {
   const navigate = useNavigate()
   const [q, setQ] = useState('')
   const classes = useAsync(() => api.profile(), [])
   const [title, setTitle] = useState('')
   const [klass, setKlass] = useState('BS Computer Science 2A')
-  const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10))
+  const [date, setDate] = useState(() => localDate())
   const [subject, setSubject] = useState<Subject>('math')
   const [problems, setProblems] = useState<ProblemDraft[]>(() => [blank()])
   const [open, setOpen] = useState<number>(problems[0].key)

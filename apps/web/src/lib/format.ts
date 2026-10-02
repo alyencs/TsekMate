@@ -46,15 +46,17 @@ export function headerDate(now = new Date()): string {
 
 export function downloadCsv(filename: string, rows: (string | number | null)[][]) {
   const esc = (v: string | number | null) => {
-    const s = v === null ? '' : String(v)
-    return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s
+    let s = v === null ? '' : String(v)
+    // A text cell starting with = + - @ (or tab/CR) would run as a formula in Excel/Sheets: make it plain text.
+    if (typeof v === 'string' && /^[=+\-@\t\r]/.test(s)) s = `'${s}`
+    return /[",\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s
   }
   const blob = new Blob([rows.map((r) => r.map(esc).join(',')).join('\n')], { type: 'text/csv' })
   const a = document.createElement('a')
   a.href = URL.createObjectURL(blob)
   a.download = filename
   a.click()
-  URL.revokeObjectURL(a.href)
+  window.setTimeout(() => URL.revokeObjectURL(a.href), 1000) // revoking right away cancels the download in some browsers
 }
 
 /** "about 25 minutes", "about 1 hour 10 minutes" (rounded up to the minute). */

@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { ChevronDown, LogOut, Settings, UserRound } from 'lucide-react'
-import { getTeacher, signOut } from '../../lib/session'
+import { getTeacher } from '../../lib/session'
+import { logOut } from '../../lib/api'
 import { Avatar } from '../ui/Logo'
 
 function initials(name: string) {
@@ -65,8 +66,8 @@ export function ProfileMenu({ variant = 'compact' }: { variant?: 'compact' | 'fu
           <button
             role="menuitem"
             className="flex w-full items-center gap-2.5 border-t border-line px-4 py-2.5 text-left text-[14px] hover:bg-gray-50"
-            onClick={() => {
-              signOut()
+            onClick={async () => {
+              await logOut()
               navigate('/signin')
             }}
           >

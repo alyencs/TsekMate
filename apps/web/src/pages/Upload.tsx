@@ -13,6 +13,26 @@ import { StudentLabel } from '../components/ui/StudentLabel'
 import { RubricCard } from '../components/RubricCard'
 
 const ACCEPT = 'image/jpeg,image/png,image/webp,application/pdf'
+const MAX_BYTES = 10 * 1024 * 1024
+// Hosts cap the size of one request (Cloud Run: 32 MiB), so a class set is sent in several smaller uploads.
+const MAX_REQUEST_BYTES = 24 * 1024 * 1024
+
+function batches(files: File[]): File[][] {
+  const out: File[][] = []
+  let cur: File[] = []
+  let size = 0
+  for (const f of files) {
+    if (cur.length && (size + f.size > MAX_REQUEST_BYTES || cur.length >= 50)) {
+      out.push(cur)
+      cur = []
+      size = 0
+    }
+    cur.push(f)
+    size += f.size
+  }
+  if (cur.length) out.push(cur)
+  return out
+}
 
 export default function Upload() {
   const { id = '' } = useParams()
@@ -31,15 +51,22 @@ export default function Upload() {
 
   async function upload(files: File[]) {
     if (!files.length) return
+    const big = files.filter((f) => f.size > MAX_BYTES)
+    if (big.length) {
+      setMsg({ tone: 'bad', text: `${big.map((f) => f.name).join(', ')}: larger than 10 MB. Nothing was uploaded; remove ${big.length === 1 ? 'it' : 'them'} and try again.` })
+      return
+    }
     setBusy(true)
     setMsg(null)
+    let added = 0
     try {
-      const added = await api.upload(id, files)
-      setMsg({ tone: 'ok', text: `Uploaded ${added.length} paper${added.length === 1 ? '' : 's'}. TsekMate reads each student's name and ID while grading and matches them to the class roster.` })
-      papers.reload()
+      for (const group of batches(files)) added += (await api.upload(id, group)).length
+      setMsg({ tone: 'ok', text: `Uploaded ${added} paper${added === 1 ? '' : 's'}. TsekMate reads each student's name and ID while grading and matches them to the class roster.` })
     } catch (e) {
-      setMsg({ tone: 'bad', text: (e as Error).message })
+      const done = added ? ` ${added} paper${added === 1 ? ' was' : 's were'} uploaded before this error.` : ''
+      setMsg({ tone: 'bad', text: (e as Error).message + done })
     } finally {
+      papers.reload()
       setBusy(false)
     }
   }
@@ -63,6 +90,13 @@ export default function Upload() {
       setMsg({ tone: 'bad', text: (e as Error).message })
       setBusy(false)
     }
+  }
+
+  // Clear the input after reading it, so choosing the same file again (for example after deleting it) still works.
+  const pick = (input: HTMLInputElement) => {
+    const files = Array.from(input.files ?? [])
+    input.value = ''
+    upload(files)
   }
 
   const onDrop = (e: DragEvent) => {
@@ -148,7 +182,7 @@ export default function Upload() {
                 <Camera className="h-7 w-7" />
               </span>
               <h2 className="mt-6 text-[20px] font-bold">Drag photos here or take a photo</h2>
-              <p className="mt-2 text-[14px] text-muted">Support JPG, PNG or PDF files up to 10MB each.</p>
+              <p className="mt-2 text-[14px] text-muted">JPG, PNG, WEBP or PDF files, up to 10 MB each.</p>
               <div className="mt-8 flex gap-4">
                 <Button size="lg" className="h-11 px-6 text-[16px]" onClick={() => fileRef.current?.click()} loading={busy && !ready}>
                   Choose files
@@ -157,8 +191,8 @@ export default function Upload() {
                   Use camera
                 </Button>
               </div>
-              <input ref={fileRef} type="file" multiple accept={ACCEPT} className="hidden" aria-label="Choose files" onChange={(e) => upload(Array.from(e.target.files ?? []))} />
-              <input ref={camRef} type="file" accept="image/*" capture="environment" className="hidden" aria-label="Take a photo" onChange={(e) => upload(Array.from(e.target.files ?? []))} />
+              <input ref={fileRef} type="file" multiple accept={ACCEPT} className="hidden" aria-label="Choose files" onChange={(e) => pick(e.currentTarget)} />
+              <input ref={camRef} type="file" accept="image/*" capture="environment" className="hidden" aria-label="Take a photo" onChange={(e) => pick(e.currentTarget)} />
             </div>
 
             {msg && (

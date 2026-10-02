@@ -56,8 +56,7 @@ def reroute(store: Store) -> int:
             if s["status"] not in ("needs_review", "ready"):
                 continue
             new = "needs_review" if (scoring.needs_teacher(b.effective(s["id"])) or not s.get("student_id")) else "ready"
-            if new != s["status"]:
-                store.update("submissions", s["id"], {"status": new})
+            if new != s["status"] and store.update_where("submissions", s["id"], {"status": new, "updated_at": now_iso()}, status=s["status"]):
                 changed += 1
     return changed
 

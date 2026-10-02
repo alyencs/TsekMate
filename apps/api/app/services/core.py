@@ -3,14 +3,16 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 import os
+import threading
 from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
 from ..grading.flags import error_label
 from ..grading.scoring import apply_edits, clean_problem, focus_problem, paper_confidence, queue_chips, rubric_problems, spread_score
 from ..models import ERROR_TYPES, ActivityIn
-from ..store.base import Store, new_id, now_iso
+from ..store.base import Store, UniqueViolation, new_id, now_iso
 
 
 class NotFound(Exception):
@@ -23,6 +25,10 @@ class Conflict(Exception):
 
 TZ = ZoneInfo(os.getenv("APP_TIMEZONE", "Asia/Manila"))
 GRADED = ("needs_review", "ready", "approved", "failed")
+BUSY = "This paper is being checked right now. Try again when grading finishes."
+# Serializes every write that gives a paper a student (upload, teacher assignment, AI identity matching), so two
+# papers can never claim one student. The store's unique rule (database index) is the second line of defense.
+assignment_lock = threading.Lock()
 PROBLEM_PREFIX = {"math": "P", "science": "P", "grammar": "I"}
 
 
@@ -242,10 +248,11 @@ def touch(store: Store, activity_id: str) -> None:
 
 
 # ---------------------------------------------------------------- dashboard
-def dashboard(store: Store) -> dict:
+def dashboard(store: Store, now: datetime | None = None) -> dict:
     acts = list_activities(store)
     badge = sum(a["flagged"] for a in acts)
-    now_local = datetime.now(TZ)
+    now = now or datetime.now(timezone.utc)
+    now_local = now.astimezone(TZ)
     midnight = now_local.replace(hour=0, minute=0, second=0, microsecond=0)
     yday = midnight - timedelta(days=1)
     reviews = store.select("teacher_reviews", approved=True)
@@ -256,7 +263,7 @@ def dashboard(store: Store) -> dict:
         empty = {"value": 0, "delta": 0}
         return {"activity_id": None, "awaiting_review": empty, "flagged": empty, "approved_today": {"value": approved_today, "delta": approved_today - approved_yday}, "class_average": {"value": 0, "out_of": 0, "delta_pct": 0}, "queue_badge": badge}
     b = Bundle(store, active["id"])
-    day_ago = datetime.now(timezone.utc) - timedelta(hours=24)
+    day_ago = now - timedelta(hours=24)
     awaiting = [s for s in b.subs if s["status"] in ("needs_review", "ready", "failed")]
     flagged = [s for s in awaiting if s["status"] in ("needs_review", "failed")]
 
@@ -308,45 +315,70 @@ def list_uploads(store: Store, activity_id: str) -> list[dict]:
 
 
 def add_uploads(store: Store, activity_id: str, files: list[tuple[str, bytes, str]], student_ids: list[str] | None = None) -> list[dict]:
-    from .quality import check
+    """Store new papers. `files` are (name, bytes, content type) already checked by services.uploads.validate.
 
-    b = Bundle(store, activity_id)
-    taken = set(b.taken())
-    roster = b.students()
-    ids: list[str | None]
-    if student_ids:
-        bad = [s for s in student_ids if s not in roster]
-        if bad:
-            raise Conflict(f"Unknown student ID(s) for {b.activity['class_name']}: {', '.join(bad)}")
-        dup = [s for s in student_ids if s in taken]
-        if dup:
-            raise Conflict(f"{', '.join(dup)} already has a paper for this activity. Delete it first to upload a retake.")
-        ids = list(student_ids)
-    else:
-        # Papers start unidentified; the grading call reads the name / ID on the paper and matches the roster.
-        ids = [None] * len(files)
-    created = []
-    for (name, data, ctype), sid in zip(files, ids):
-        sub_id = f"sub-{new_id()[:12]}"
-        ext = {"image/png": "png", "image/webp": "webp", "application/pdf": "pdf"}.get(ctype, "jpg")
-        path = f"uploads/{activity_id}/{sub_id}.{ext}"
-        store.put_image(path, data, ctype)
-        q = check(data) if ctype.startswith("image/") else {"ok": True, "reason": None}
-        ts = now_iso()
-        row = {
-            "id": sub_id,
-            "activity_id": activity_id,
-            "student_id": sid,
-            "identity": {"status": "manual", "method": "teacher_upload"} if sid else {"status": "pending"},
-            "image_path": path,
-            "image_hash": hashlib.sha256(data).hexdigest(),
-            "status": "uploaded",
-            "quality": q,
-            "created_at": ts,
-            "updated_at": ts,
-        }
-        store.insert("submissions", row)
-        created.append({"id": sub_id, "student_id": sid, "student_name": b.student_name(sid), "status": "uploaded", "image_url": store.signed_url(path), "quality": q})
+    The whole request is refused (nothing stored) when a student would get two papers, or when the same photo is
+    uploaded twice (a double-click or a repeated request), so a retry can never create duplicates."""
+    from .quality import check
+    from .uploads import EXTENSIONS
+
+    hashes = [hashlib.sha256(data).hexdigest() for _n, data, _c in files]
+    seen: dict[str, str] = {}
+    for (name, _d, _c), h in zip(files, hashes):
+        if h in seen:
+            raise Conflict(f"{name} is the same photo as {seen[h]}. Upload each paper once.")
+        seen[h] = name
+    with assignment_lock:
+        b = Bundle(store, activity_id)
+        taken = set(b.taken())
+        roster = b.students()
+        existing = {s.get("image_hash") for s in b.subs if s.get("image_hash")}
+        again = [name for (name, _d, _c), h in zip(files, hashes) if h in existing]
+        if again:
+            raise Conflict(f"Already uploaded to this activity: {', '.join(again)}. Delete the earlier copy first to upload it again.")
+        ids: list[str | None]
+        if student_ids:
+            bad = [s for s in student_ids if s not in roster]
+            if bad:
+                raise Conflict(f"Unknown student ID(s) for {b.activity['class_name']}: {', '.join(bad)}")
+            twice = sorted({s for s in student_ids if student_ids.count(s) > 1})
+            if twice:
+                raise Conflict(f"{', '.join(twice)} is listed for more than one file. Each student gets one paper per activity.")
+            dup = [s for s in student_ids if s in taken]
+            if dup:
+                raise Conflict(f"{', '.join(dup)} already has a paper for this activity. Delete it first to upload a retake.")
+            ids = list(student_ids)
+        else:
+            # Papers start unidentified; the grading call reads the name / ID on the paper and matches the roster.
+            ids = [None] * len(files)
+        created = []
+        for (name, data, ctype), sid, h in zip(files, ids, hashes):
+            sub_id = f"sub-{new_id()[:12]}"
+            path = f"uploads/{activity_id}/{sub_id}.{EXTENSIONS[ctype]}"
+            q = check(data) if ctype.startswith("image/") else {"ok": True, "reason": None}
+            ts = now_iso()
+            row = {
+                "id": sub_id,
+                "activity_id": activity_id,
+                "student_id": sid,
+                "identity": {"status": "manual", "method": "teacher_upload"} if sid else {"status": "pending"},
+                "image_path": path,
+                "image_hash": h,
+                "status": "uploaded",
+                "quality": q,
+                "created_at": ts,
+                "updated_at": ts,
+            }
+            try:
+                store.insert("submissions", row)
+            except UniqueViolation:
+                raise Conflict(f"{sid} already has a paper for this activity. Delete it first to upload a retake.") from None
+            try:
+                store.put_image(path, data, ctype)
+            except Exception:
+                store.delete("submissions", id=sub_id)  # never leave a paper row without its photo
+                raise
+            created.append({"id": sub_id, "student_id": sid, "student_name": b.student_name(sid), "status": "uploaded", "image_url": store.signed_url(path), "quality": q})
     touch(store, activity_id)
     from . import notifications
 
@@ -364,7 +396,7 @@ def delete_submission(store: Store, sub_id: str) -> None:
     if s["status"] == "approved":
         raise Conflict("This paper is already approved and in the gradebook, so it cannot be deleted here.")
     if s["status"] == "grading":
-        raise Conflict("This paper is being checked right now. Try again in a moment.")
+        raise Conflict(BUSY)
     if s.get("image_path"):
         store.delete_image(s["image_path"])
     for t in ("ai_results", "teacher_reviews", "parent_messages"):
@@ -507,12 +539,15 @@ def patch_review(store: Store, sub_id: str, unit_edits: dict | None, criterion_s
     s = store.get("submissions", sub_id)
     if not s:
         raise NotFound("Paper not found.")
+    if s["status"] == "grading":
+        raise Conflict(BUSY)
     b = Bundle(store, s["activity_id"])
     if sub_id not in b.ai:
         raise Conflict("This paper has not been graded yet.")
     r = _review_row(store, sub_id)
     ts = now_iso()
     log = list(r.get("edit_log") or [])
+    first_new = len(log)
     ue = dict(r.get("unit_edits") or {})
     cs = dict(r.get("criterion_scores") or {})
     if r.get("problem_scores"):  # carry legacy per-problem overrides over as criterion scores on the first edit
@@ -530,9 +565,12 @@ def patch_review(store: Store, sub_id: str, unit_edits: dict | None, criterion_s
         if pid not in valid_problems:
             raise Conflict(f"Unknown unit '{key}'.")
         clean = {}
+        # `edit` is a validated models.UnitEdit dump: only known fields, finite non-negative points, real strings.
         for k, v in edit.items():
             if k == "points_awarded":
-                v = max(0.0, float(v))
+                v = float(v)
+                if not math.isfinite(v) or v < 0:
+                    raise Conflict("Points must be a number of 0 or more.")
             elif k == "verdict" and v not in ("correct", "error", "unclear"):
                 raise Conflict(f"Invalid verdict '{v}'.")
             elif k == "error_type" and v not in (None, *allowed_types):
@@ -552,7 +590,7 @@ def patch_review(store: Store, sub_id: str, unit_edits: dict | None, criterion_s
             raise Conflict(f"'{name}' is not a criterion in this activity's rubric.")
         if v is not None:
             v = float(v)
-            if v < 0 or v > crit_max[name]:
+            if not math.isfinite(v) or v < 0 or v > crit_max[name]:
                 raise Conflict(f"{name}: enter a score from 0 to {crit_max[name]:g}.")
         if cs.get(key) != v:
             log.append({"at": ts, "field": f"criterion.{key}", "from": cs.get(key), "to": v})
@@ -566,13 +604,23 @@ def patch_review(store: Store, sub_id: str, unit_edits: dict | None, criterion_s
         if fb.get(pid) != text:
             log.append({"at": ts, "field": f"feedback.{pid}", "from": fb.get(pid), "to": text})
         fb[pid] = text
+    changed = len(log) > first_new
     patch = {"unit_edits": ue, "criterion_scores": cs, "feedback": fb, "edit_log": log, "updated_at": ts}
     if r.get("problem_scores"):
         patch["problem_scores"] = {}
+    if s["status"] == "approved" and changed:
+        # An approved grade never changes silently: a real edit withdraws the approval, the paper goes back to the
+        # review queue, and the gradebook leaves it out until the teacher approves again.
+        b.reviews[sub_id] = {**r, **patch}
+        from ..grading.scoring import needs_teacher
+
+        back = "needs_review" if needs_teacher(b.effective(sub_id)) or not s.get("student_id") else "ready"
+        if not store.update_where("submissions", sub_id, {"status": back, "updated_at": ts}, status="approved"):
+            raise Conflict("This paper changed while you were editing it. Reload the page and try again.")
+        log.append({"at": ts, "field": "approved", "from": True, "to": False})
+        patch.update({"approved": False, "final_score": None})
+        touch(store, s["activity_id"])
     store.update("teacher_reviews", r["id"], patch)
-    if s["status"] == "approved":
-        b2 = Bundle(store, s["activity_id"])
-        store.update("teacher_reviews", r["id"], {"final_score": b2.final_total(sub_id)})
     return submission_detail(store, sub_id)
 
 
@@ -580,6 +628,8 @@ def approve(store: Store, sub_id: str) -> dict:
     s = store.get("submissions", sub_id)
     if not s:
         raise NotFound("Paper not found.")
+    if s["status"] not in ("needs_review", "ready", "failed", "approved"):
+        raise Conflict(BUSY if s["status"] == "grading" else "This paper has not been graded yet.")
     b = Bundle(store, s["activity_id"])
     if sub_id not in b.ai:
         raise Conflict("This paper has not been graded yet.")
@@ -589,45 +639,58 @@ def approve(store: Store, sub_id: str) -> dict:
     b.reviews[sub_id] = r
     total = b.final_total(sub_id)
     ts = now_iso()
+    patch: dict = {"status": "approved", "updated_at": ts}
+    from . import settings as app_settings
+
+    delete_image = bool(app_settings.get(store)["delete_images_on_approve"] and s.get("image_path"))
+    if delete_image:
+        patch["image_path"] = None
+    # Compare-and-set on the status read above: if Grade again (or anything else) changed the paper in between,
+    # nothing is written and the teacher is told, so the paper never ends up both approved and re-graded.
+    if not store.update_where("submissions", sub_id, patch, status=s["status"], student_id=s["student_id"]):
+        raise Conflict("This paper changed while you were approving it. Reload the page and check it again.")
     feedback = dict(r.get("feedback") or {})
     for p in b.effective(sub_id):
         feedback.setdefault(p["problem_id"], p.get("student_hint") or "")
     log = list(r.get("edit_log") or []) + [{"at": ts, "field": "approved", "from": False, "to": True}]
     store.update("teacher_reviews", r["id"], {"approved": True, "approved_at": ts, "final_score": total, "feedback": feedback, "edit_log": log, "updated_at": ts})
-    patch: dict = {"status": "approved", "updated_at": ts}
-    from . import settings as app_settings
-
-    if app_settings.get(store)["delete_images_on_approve"] and s.get("image_path"):
+    if delete_image:
         store.delete_image(s["image_path"])
-        patch["image_path"] = None
-    store.update("submissions", sub_id, patch)
     touch(store, s["activity_id"])
     return {"submission": submission_detail(store, sub_id), "final_score": total, "max_score": float(b.activity["total_points"])}
 
 
 def assign_student(store: Store, sub_id: str, student_id: str) -> dict:
     """Teacher associates a paper with a student on the class roster (for unidentified or mismatched papers)."""
-    s = store.get("submissions", sub_id)
-    if not s:
-        raise NotFound("Paper not found.")
-    b = Bundle(store, s["activity_id"])
-    student = next((r for r in b.roster() if r["id"] == student_id), None)
-    if not student:
-        raise Conflict(f"{student_id} is not on the roster of {b.activity['class_name']}.")
-    other = b.taken().get(student_id)
-    if other and other != sub_id:
-        raise Conflict(f"{student['name']} ({student_id}) already has a paper for this activity. Delete or reassign that paper first.")
-    if s["status"] == "approved" and s.get("student_id") != student_id:
-        raise Conflict("This paper is already approved. Its student cannot be changed here.")
-    ts = now_iso()
-    identity = {**(s.get("identity") or {}), "status": "matched", "method": "teacher", "previous_student_id": s.get("student_id"), "assigned_at": ts}
-    patch: dict = {"student_id": student_id, "identity": identity, "updated_at": ts}
-    if s["status"] == "needs_review" and sub_id in b.ai:
-        from ..grading.scoring import needs_teacher
+    with assignment_lock:
+        s = store.get("submissions", sub_id)
+        if not s:
+            raise NotFound("Paper not found.")
+        if s["status"] == "grading":
+            raise Conflict(BUSY)
+        b = Bundle(store, s["activity_id"])
+        student = next((r for r in b.roster() if r["id"] == student_id), None)
+        if not student:
+            raise Conflict(f"{student_id} is not on the roster of {b.activity['class_name']}.")
+        other = b.taken().get(student_id)
+        if other and other != sub_id:
+            raise Conflict(f"{student['name']} ({student_id}) already has a paper for this activity. Delete or reassign that paper first.")
+        if s["status"] == "approved" and s.get("student_id") != student_id:
+            raise Conflict("This paper is already approved. Its student cannot be changed here.")
+        ts = now_iso()
+        identity = {**(s.get("identity") or {}), "status": "matched", "method": "teacher", "previous_student_id": s.get("student_id"), "assigned_at": ts}
+        patch: dict = {"student_id": student_id, "identity": identity, "updated_at": ts}
+        if s["status"] == "needs_review" and sub_id in b.ai:
+            from ..grading.scoring import needs_teacher
 
-        if not needs_teacher(b.effective(sub_id)):
-            patch["status"] = "ready"  # it was only waiting for the student to be identified
-    store.update("submissions", sub_id, patch)
+            if not needs_teacher(b.effective(sub_id)):
+                patch["status"] = "ready"  # it was only waiting for the student to be identified
+        try:
+            ok = store.update_where("submissions", sub_id, patch, status=s["status"], student_id=s.get("student_id"))
+        except UniqueViolation:
+            raise Conflict(f"{student['name']} ({student_id}) already has a paper for this activity. Delete or reassign that paper first.") from None
+        if not ok:
+            raise Conflict("This paper changed in the meantime. Reload the page and try again.")
     r = _review_row(store, sub_id)
     store.update("teacher_reviews", r["id"], {"edit_log": list(r.get("edit_log") or []) + [{"at": ts, "field": "student_id", "from": s.get("student_id"), "to": student_id}], "updated_at": ts})
     touch(store, s["activity_id"])
@@ -669,7 +732,24 @@ def _error_units(b: Bundle) -> list[tuple[str, str, str, dict]]:
     return out
 
 
-def class_summary(store: Store, activity_id: str) -> dict:
+def _error_keys(errs: list[tuple[str, str, str, dict]]) -> dict[str, tuple]:
+    """'sub_id:problem_id:unit_index' -> (student, problem_id, unit). The ids the misconception clusters refer to."""
+    return {f"{sid}:{pid}:{u['index']}": (st, pid, u) for sid, st, pid, u in errs}
+
+
+def _signature(keys: dict) -> str:
+    return hashlib.sha1(json.dumps(sorted(f"{k}:{u.get('error_type')}" for k, (_st, _pid, u) in keys.items())).encode()).hexdigest()
+
+
+def error_signature(b: Bundle) -> str:
+    """Fingerprint of the class's current error units (which paper, problem, unit, and error type)."""
+    return _signature(_error_keys(_error_units(b)))
+
+
+def class_summary(store: Store, activity_id: str, refresh: bool = False) -> dict:
+    """Counts always come from code. The AI part (misconception names, reteach focus) is read from the cache; it is
+    generated only when the teacher asks for it (`refresh=True`, POST .../class-summary/refresh), so opening the page
+    never makes a paid AI call. `ai_summary.stale` says whether the cached names predate the current errors."""
     from . import ai_text
 
     b = Bundle(store, activity_id)
@@ -691,15 +771,19 @@ def class_summary(store: Store, activity_id: str) -> dict:
     avg, out_of = class_average(b)
     most = max(by_crit.items(), key=lambda kv: kv[1])[0] if by_crit else None
 
-    keys = {f"{sid}:{pid}:{u['index']}": (st, pid, u) for sid, st, pid, u in errs}
-    signature = hashlib.sha1(json.dumps(sorted(keys)).encode()).hexdigest()
+    keys = _error_keys(errs)
+    signature = _signature(keys)
     cached = store.get("class_summaries", activity_id)
-    if errs and (not cached or (cached["signature"] not in ("seed", signature))):
+    refresh_failed = False
+    if refresh and errs:
         fresh = ai_text.misconceptions(b, keys)
         if fresh:
             row = {"id": activity_id, "activity_id": activity_id, "signature": signature, **fresh, "created_at": now_iso()}
             store.insert("class_summaries", row)
             cached = row
+        else:
+            refresh_failed = True
+    stale = bool(errs) and (not cached or cached["signature"] != signature)
     clusters = []
     if cached:
         for m in cached["misconceptions"]:
@@ -735,6 +819,7 @@ def class_summary(store: Store, activity_id: str) -> dict:
         "per_problem": per_problem,
         "misconceptions": clusters,
         "reteach_focus": cached["reteach_focus"] if cached else "Grade and review more papers to get a suggested reteach focus.",
+        "ai_summary": {"cached": bool(cached), "stale": stale, "refresh_failed": refresh_failed, "created_at": cached.get("created_at") if cached else None},
     }
 
 
@@ -761,6 +846,16 @@ def gradebook(store: Store, activity_id: str) -> dict:
         else:
             rows.append({"student_id": st, "student_name": names[st], "status": status[st], "submission_id": s["id"] if s else None, "scores": [None] * len(b.problems), "edited": [False] * len(b.problems), "total": None, "just_approved": False})
     rows.sort(key=lambda r: (not r["just_approved"], r["student_id"]))
+    roster_ids = set(names)
+    for s in b.subs:  # approved papers of students who are no longer on this class roster stay visible
+        st = s.get("student_id")
+        if st and st not in roster_ids and s["status"] == "approved":
+            finals = b.problem_finals(s["id"])
+            scores = [finals.get(p["id"]) for p in b.problems]
+            other = store.get("students", st)
+            rows.append({"student_id": st, "student_name": (other or {}).get("name") or None, "status": "Approved (not on the class roster)",
+                         "submission_id": s["id"], "scores": scores, "edited": [False] * len(b.problems), "total": round(sum(v or 0 for v in scores), 2),
+                         "just_approved": False})
     for s in b.subs:  # papers not matched to anyone yet
         if not s.get("student_id"):
             rows.append({"student_id": None, "student_name": None, "status": "Student not identified", "submission_id": s["id"], "scores": [None] * len(b.problems), "edited": [False] * len(b.problems), "total": None, "just_approved": False})
